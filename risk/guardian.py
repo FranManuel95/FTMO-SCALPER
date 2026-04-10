@@ -14,6 +14,7 @@ class TradingStatus(Enum):
     WEEKEND    = "WEEKEND_BLOCK"
     MAX_TRADES = "MAX_DAILY_TRADES"
     PAUSED     = "MANUAL_PAUSE"
+    XMAS_BLOCK = "XMAS_BLOCK"
 
 class FTMORiskGuardian:
     DAILY_LOSS_LIMIT_PCT  = 0.045
@@ -24,7 +25,7 @@ class FTMORiskGuardian:
     MIN_RR_RATIO          = 2.0
 
     def __init__(self, initial_balance: float):
-        self.initial_balance   = initial_balance
+        self.initial_balance    = initial_balance
         self.daily_start_equity = initial_balance
         self.highest_balance    = initial_balance
         self.trades_today       = 0
@@ -45,7 +46,13 @@ class FTMORiskGuardian:
         if self.paused:
             return TradingStatus.PAUSED
 
+        # Filtro navideño: 20 Dic - 3 Ene
         now = datetime.utcnow()
+        is_xmas = (now.month == 12 and now.day >= 20) or \
+                  (now.month == 1  and now.day <= 3)
+        if is_xmas:
+            return TradingStatus.XMAS_BLOCK
+
         if now.weekday() == 4 and now.hour >= 21:
             return TradingStatus.WEEKEND
         if now.weekday() in [5, 6]:
@@ -81,11 +88,11 @@ class FTMORiskGuardian:
         daily_loss_pct = (self.daily_start_equity - current_equity) / self.initial_balance * 100
         total_dd_pct   = (self.highest_balance - current_equity) / self.initial_balance * 100
         return {
-            "equity":          current_equity,
-            "daily_loss_pct":  round(daily_loss_pct, 2),
-            "total_dd_pct":    round(total_dd_pct, 2),
-            "trades_today":    self.trades_today,
-            "daily_limit":     self.DAILY_LOSS_LIMIT_PCT * 100,
-            "max_dd_limit":    self.MAX_LOSS_LIMIT_PCT * 100,
+            "equity":            current_equity,
+            "daily_loss_pct":    round(daily_loss_pct, 2),
+            "total_dd_pct":      round(total_dd_pct, 2),
+            "trades_today":      self.trades_today,
+            "daily_limit":       self.DAILY_LOSS_LIMIT_PCT * 100,
+            "max_dd_limit":      self.MAX_LOSS_LIMIT_PCT * 100,
             "safe_daily_margin": round(self.DAILY_LOSS_LIMIT_PCT * 100 - daily_loss_pct, 2),
         }

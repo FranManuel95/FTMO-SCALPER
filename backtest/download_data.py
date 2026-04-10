@@ -1,92 +1,272 @@
-# backtest/download_data.py — Descarga multi-timeframe desde Dukascopy
+# import os
+# from datetime import datetime, timedelta
 
-import requests
-import struct
-import lzma
-import pandas as pd
+# import MetaTrader5 as mt5
+# import pandas as pd
+
+
+# def save_rates_to_csv(rates, path: str):
+#     if rates is None or len(rates) == 0:
+#         print(f"  Sin datos -> {path}")
+#         return
+
+#     df = pd.DataFrame(rates)
+#     df["time"] = pd.to_datetime(df["time"], unit="s")
+#     df = df.set_index("time")[["open", "high", "low", "close", "tick_volume"]]
+#     df.columns = ["open", "high", "low", "close", "vol"]
+
+#     df = df.sort_index()
+#     df = df[~df.index.duplicated(keep="last")]
+
+#     os.makedirs("backtest/data", exist_ok=True)
+#     df.to_csv(path)
+
+#     print(
+#         f"  Guardado: {path} | {len(df)} velas | "
+#         f"Desde: {df.index[0]} Hasta: {df.index[-1]}"
+#     )
+
+
+# def download_mt5_range(symbol: str, timeframe_str: str, years: int):
+#     tf_map = {
+#         "1M":  mt5.TIMEFRAME_M1,
+#         "5M":  mt5.TIMEFRAME_M5,
+#         "15M": mt5.TIMEFRAME_M15,
+#         "30M": mt5.TIMEFRAME_M30,
+#         "1H":  mt5.TIMEFRAME_H1,
+#         "4H":  mt5.TIMEFRAME_H4,
+#         "1D":  mt5.TIMEFRAME_D1,
+#     }
+
+#     tf = tf_map[timeframe_str]
+#     date_to = datetime.now()
+#     date_from = date_to - timedelta(days=365 * years)
+
+#     rates = mt5.copy_rates_range(symbol, tf, date_from, date_to)
+#     print(f"  last_error {symbol} {timeframe_str}: {mt5.last_error()}")
+
+#     path = f"backtest/data/{symbol}_{timeframe_str}.csv"
+#     save_rates_to_csv(rates, path)
+
+
+# def download_mt5_chunked(symbol: str, timeframe_str: str, years: int, chunk_days: int = 30):
+#     tf_map = {
+#         "1M": mt5.TIMEFRAME_M1,
+#         "5M": mt5.TIMEFRAME_M5,
+#     }
+
+#     tf = tf_map[timeframe_str]
+#     date_to = datetime.now()
+#     date_from = date_to - timedelta(days=365 * years)
+
+#     current_from = date_from
+#     dfs = []
+
+#     print(f"\nDescargando {symbol} {timeframe_str} por bloques de {chunk_days} días...")
+
+#     while current_from < date_to:
+#         current_to = min(current_from + timedelta(days=chunk_days), date_to)
+
+#         rates = mt5.copy_rates_range(symbol, tf, current_from, current_to)
+#         print(
+#             f"  Bloque {current_from.strftime('%Y-%m-%d')} -> {current_to.strftime('%Y-%m-%d')} "
+#             f"| last_error: {mt5.last_error()}"
+#         )
+
+#         if rates is not None and len(rates) > 0:
+#             df = pd.DataFrame(rates)
+#             df["time"] = pd.to_datetime(df["time"], unit="s")
+#             df = df.set_index("time")[["open", "high", "low", "close", "tick_volume"]]
+#             df.columns = ["open", "high", "low", "close", "vol"]
+#             dfs.append(df)
+
+#         current_from = current_to
+
+#     if not dfs:
+#         print(f"  Sin datos {timeframe_str} para {symbol}")
+#         return
+
+#     df_all = pd.concat(dfs)
+#     df_all = df_all.sort_index()
+#     df_all = df_all[~df_all.index.duplicated(keep="last")]
+
+#     path = f"backtest/data/{symbol}_{timeframe_str}.csv"
+#     os.makedirs("backtest/data", exist_ok=True)
+#     df_all.to_csv(path)
+
+#     print(
+#         f"\n  Guardado final: {path} | {len(df_all)} velas | "
+#         f"Desde: {df_all.index[0]} Hasta: {df_all.index[-1]}"
+#     )
+
+
+# if __name__ == "__main__":
+#     if not mt5.initialize():
+#         print("Error al inicializar MT5:", mt5.last_error())
+#         raise SystemExit
+
+#     symbol = "XAUUSD"
+
+#     # Años de historial por timeframe
+#     # (ajusta según lo que tu broker tenga disponible)
+#     RANGES = {
+#         "1M":  2,   # M1  → brokers raramente guardan más de 2-3 años
+#         "5M":  3,   # M5  → suele haber hasta 3-5 años
+#         "15M": 5,   # M15 → hasta 5 años
+#         "30M": 5,   # M30 → hasta 5 años
+#         "1H":  10,  # H1  → hasta 10 años
+#         "4H":  15,  # H4  → hasta 15 años
+#         "1D":  20,  # D1  → hasta 20+ años
+#     }
+
+#     print(f"\n{'='*40}")
+#     print(f"Descargando {symbol}")
+#     print(f"{'='*40}")
+
+#     # M1 y M5 en bloques para evitar timeouts
+#     download_mt5_chunked(symbol, "1M", years=RANGES["1M"], chunk_days=30)
+#     download_mt5_chunked(symbol, "5M", years=RANGES["5M"], chunk_days=60)
+
+#     # El resto de una sola llamada
+#     for tf in ["15M", "30M", "1H", "4H", "1D"]:
+#         print(f"\nDescargando {symbol} {tf} ({RANGES[tf]} años)...")
+#         download_mt5_range(symbol, tf, years=RANGES[tf])
+
+#     mt5.shutdown()
+#     print("\n✅ Descarga completada.")
 import os
 from datetime import datetime, timedelta
 
-def download_dukascopy_hour(symbol: str, dt: datetime) -> pd.DataFrame:
-    url = (f"https://datafeed.dukascopy.com/datafeed/{symbol}/"
-           f"{dt.year}/{dt.month-1:02d}/{dt.day:02d}/{dt.hour:02d}h_ticks.bi5")
-    try:
-        resp = requests.get(url, timeout=15,
-                           headers={"User-Agent": "Mozilla/5.0"})
-        if resp.status_code != 200 or len(resp.content) == 0:
-            return pd.DataFrame()
-        data = lzma.decompress(resp.content)
-        ticks = []
-        for i in range(0, len(data), 20):
-            chunk = data[i:i+20]
-            if len(chunk) < 20: break
-            ms, ask, bid, ask_vol, bid_vol = struct.unpack('>IIIff', chunk)
-            timestamp = dt + timedelta(milliseconds=ms)
-            price = bid / 100000.0
-            ticks.append({'time': timestamp, 'price': price})
-        if not ticks:
-            return pd.DataFrame()
-        df = pd.DataFrame(ticks).set_index('time')
-        return df
-    except Exception:
-        return pd.DataFrame()
+import MetaTrader5 as mt5
+import pandas as pd
 
-def download_month_timeframe(symbol: str, year: int,
-                              month: int, timeframe: str) -> pd.DataFrame:
-    print(f"  Descargando {symbol} {timeframe} {year}/{month:02d}...")
-    frames = []
-    start = datetime(year, month, 1)
-    end   = datetime(year, month + 1, 1) if month < 12 else datetime(year + 1, 1, 1)
 
-    current = start
-    while current < end:
-        for hour in range(24):
-            dt = datetime(current.year, current.month, current.day, hour)
-            df = download_dukascopy_hour(symbol, dt)
-            if not df.empty:
-                frames.append(df)
-        current += timedelta(days=1)
+def save_rates_to_csv(rates, path: str):
+    if rates is None or len(rates) == 0:
+        print(f"  Sin datos -> {path}")
+        return
 
-    if not frames:
-        return pd.DataFrame()
+    df = pd.DataFrame(rates)
+    df["time"] = pd.to_datetime(df["time"], unit="s")
+    df = df.set_index("time")[["open", "high", "low", "close", "tick_volume"]]
+    df.columns = ["open", "high", "low", "close", "vol"]
 
-    # Concatenar todos los ticks
-    all_ticks = pd.concat(frames).sort_index()
-    all_ticks = all_ticks[~all_ticks.index.duplicated()]
+    df = df.sort_index()
+    df = df[~df.index.duplicated(keep="last")]
 
-    # Resamplear al timeframe pedido
-    tf_map = {'5m': '5min', '15m': '15min', '1h': '1h'}
-    rule = tf_map.get(timeframe, '5min')
+    os.makedirs("backtest/data", exist_ok=True)
+    df.to_csv(path)
 
-    df_resampled = all_ticks['price'].resample(rule).ohlc().dropna()
-    print(f"    OK - {len(df_resampled)} velas {timeframe}")
-    return df_resampled
+    print(
+        f"  Guardado: {path} | {len(df)} velas | "
+        f"Desde: {df.index[0]} Hasta: {df.index[-1]}"
+    )
 
-def download_all_timeframes(symbol: str = "EURUSD", months: int = 6):
-    end_date   = datetime.utcnow()
-    start_date = end_date - timedelta(days=months * 30)
 
-    for tf in ['5m', '15m', '1h']:
-        frames = []
-        current = datetime(start_date.year, start_date.month, 1)
+def download_mt5_range(symbol: str, timeframe_str: str, years: int):
+    tf_map = {
+        "1M":  mt5.TIMEFRAME_M1,
+        "5M":  mt5.TIMEFRAME_M5,
+        "15M": mt5.TIMEFRAME_M15,
+        "30M": mt5.TIMEFRAME_M30,
+        "1H":  mt5.TIMEFRAME_H1,
+        "4H":  mt5.TIMEFRAME_H4,
+        "1D":  mt5.TIMEFRAME_D1,
+    }
 
-        print(f"\nDescargando {tf}...")
-        while current <= end_date:
-            df = download_month_timeframe(symbol, current.year, current.month, tf)
-            if not df.empty:
-                frames.append(df)
-            if current.month == 12:
-                current = datetime(current.year + 1, 1, 1)
-            else:
-                current = datetime(current.year, current.month + 1, 1)
+    tf = tf_map[timeframe_str]
+    date_to = datetime.now()
+    date_from = date_to - timedelta(days=365 * years)
 
-        if frames:
-            full_df = pd.concat(frames).sort_index()
-            full_df = full_df[~full_df.index.duplicated()]
-            os.makedirs("backtest/data", exist_ok=True)
-            path = f"backtest/data/{symbol}_{tf.upper()}.csv"
-            full_df.to_csv(path)
-            print(f"  Total: {len(full_df)} velas guardadas en {path}")
+    rates = mt5.copy_rates_range(symbol, tf, date_from, date_to)
+    print(f"  last_error {symbol} {timeframe_str}: {mt5.last_error()}")
+
+    path = f"backtest/data/{symbol}_{timeframe_str}.csv"
+    save_rates_to_csv(rates, path)
+
+
+def download_mt5_chunked(symbol: str, timeframe_str: str, years: int, chunk_days: int = 30):
+    tf_map = {
+        "1M": mt5.TIMEFRAME_M1,
+        "5M": mt5.TIMEFRAME_M5,
+    }
+
+    tf = tf_map[timeframe_str]
+    date_to = datetime.now()
+    date_from = date_to - timedelta(days=365 * years)
+
+    current_from = date_from
+    dfs = []
+
+    print(f"\nDescargando {symbol} {timeframe_str} por bloques de {chunk_days} días...")
+
+    while current_from < date_to:
+        current_to = min(current_from + timedelta(days=chunk_days), date_to)
+
+        rates = mt5.copy_rates_range(symbol, tf, current_from, current_to)
+        print(
+            f"  Bloque {current_from.strftime('%Y-%m-%d')} -> {current_to.strftime('%Y-%m-%d')} "
+            f"| last_error: {mt5.last_error()}"
+        )
+
+        if rates is not None and len(rates) > 0:
+            df = pd.DataFrame(rates)
+            df["time"] = pd.to_datetime(df["time"], unit="s")
+            df = df.set_index("time")[["open", "high", "low", "close", "tick_volume"]]
+            df.columns = ["open", "high", "low", "close", "vol"]
+            dfs.append(df)
+
+        current_from = current_to
+
+    if not dfs:
+        print(f"  Sin datos {timeframe_str} para {symbol}")
+        return
+
+    df_all = pd.concat(dfs)
+    df_all = df_all.sort_index()
+    df_all = df_all[~df_all.index.duplicated(keep="last")]
+
+    path = f"backtest/data/{symbol}_{timeframe_str}.csv"
+    os.makedirs("backtest/data", exist_ok=True)
+    df_all.to_csv(path)
+
+    print(
+        f"\n  Guardado final: {path} | {len(df_all)} velas | "
+        f"Desde: {df_all.index[0]} Hasta: {df_all.index[-1]}"
+    )
+
 
 if __name__ == "__main__":
-    download_all_timeframes("EURUSD", months=6)
+    if not mt5.initialize():
+        print("Error al inicializar MT5:", mt5.last_error())
+        raise SystemExit
+
+    symbol = "XAUUSD"
+
+    # Años de historial por timeframe
+    # (ajusta según lo que tu broker tenga disponible)
+    RANGES = {
+        "1M":  2,   # M1  → brokers raramente guardan más de 2-3 años
+        "5M":  3,   # M5  → suele haber hasta 3-5 años
+        "15M": 5,   # M15 → hasta 5 años
+        "30M": 5,   # M30 → hasta 5 años
+        "1H":  10,  # H1  → hasta 10 años
+        "4H":  15,  # H4  → hasta 15 años
+        "1D":  20,  # D1  → hasta 20+ años
+    }
+
+    print(f"\n{'='*40}")
+    print(f"Descargando {symbol}")
+    print(f"{'='*40}")
+
+    # M1 y M5 en bloques para evitar timeouts
+    download_mt5_chunked(symbol, "1M", years=RANGES["1M"], chunk_days=30)
+    download_mt5_chunked(symbol, "5M", years=RANGES["5M"], chunk_days=60)
+
+    # El resto de una sola llamada
+    for tf in ["15M", "30M", "1H", "4H", "1D"]:
+        print(f"\nDescargando {symbol} {tf} ({RANGES[tf]} años)...")
+        download_mt5_range(symbol, tf, years=RANGES[tf])
+
+    mt5.shutdown()
+    print("\n✅ Descarga completada.")

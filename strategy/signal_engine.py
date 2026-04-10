@@ -1,4 +1,4 @@
-# strategy/signal_engine.py — Breakout + Momentum + EMA Trend
+# strategy/signal_engine.py — MTF v2: 1H + 15M + 5M + VWAP + ADX + Trailing
 
 import pandas as pd
 import numpy as np
@@ -20,114 +20,185 @@ class TradeSetup:
     sl_pips:     float
     rr_ratio:    float
     reason:      str
+    trail_mult:  float = 2.0
 
 class SignalEngine:
     LONDON_OPEN  = time(7, 0)
     LONDON_CLOSE = time(17, 0)
 
-    RANGE_PERIOD  = 20
-    EMA_FAST      = 9
-    EMA_SLOW      = 21
-    EMA_TREND     = 200
-    RSI_PERIOD    = 14
-    ATR_PERIOD    = 14
-    ATR_SL_MULT   = 1.5
-    RR_RATIO      = 2.0
-    ATR_MIN       = 0.0003
-    BREAKOUT_CONF = 0.0002  # Minimo pips de ruptura para confirmar
+    # Parametros validados en backtest
+    EMA_TREND   = 200
+    EMA_FAST    = 20
+    EMA_SLOW    = 50
+    ADX_PERIOD  = 14
+    ADX_MIN     = 18
+    ADX_MAX     = 58
+    RSI_PERIOD  = 14
+    ATR_PERIOD  = 14
+    ATR_SL_MULT = 1.2
+    RR_RATIO    = 1.6
+    ATR_MIN     = 0.0003
+    TRAIL_MULT  = 2.0
+
+    def __init__(self):
+        # Cache para datos multi-timeframe
+        self._df_1h  = None
+        self._df_15m = None
 
     def is_valid_session(self) -> bool:
         now = datetime.utcnow().time()
         return self.LONDON_OPEN <= now <= self.LONDON_CLOSE
 
-    def _compute_rsi(self, prices: pd.Series) -> pd.Series:
-        delta = prices.diff()
+    def update_higher_timeframes(self, df_1h: pd.DataFrame,
+                                  df_15m: pd.DataFrame):
+        self._df_1h  = self._prepare_1h(df_1h)
+        self._df_15m = self._prepare_15m(df_15m)
+
+    def _add_adx(self, df: pd.DataFrame) -> pd.DataFrame:
+        high  = df['high']
+        low   = df['low']
+        close = df['close']
+        plus_dm  = high.diff()
+        minus_dm = -low.diff()
+        plus_dm[plus_dm < 0]   = 0
+        minus_dm[minus_dm < 0] = 0
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low  - close.shift()).abs()
+        ], axis=1).max(axis=1)
+        atr      = tr.rolling(self.ADX_PERIOD).mean()
+        plus_di  = 100 * plus_dm.rolling(self.ADX_PERIOD).mean()  / (atr + 1e-10)
+        minus_di = 100 * minus_dm.rolling(self.ADX_PERIOD).mean() / (atr + 1e-10)
+        dx       = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)
+        df['adx']      = dx.rolling(self.ADX_PERIOD).mean()
+        df['plus_di']  = plus_di
+        df['minus_di'] = minus_di
+        return df
+
+    def _add_rsi(self, df: pd.DataFrame) -> pd.DataFrame:
+        delta = df['close'].diff()
         gain  = delta.where(delta > 0, 0).rolling(self.RSI_PERIOD).mean()
         loss  = (-delta.where(delta < 0, 0)).rolling(self.RSI_PERIOD).mean()
-        rs    = gain / loss.replace(0, 1e-10)
-        return 100 - (100 / (1 + rs))
+        df['rsi'] = 100 - (100 / (1 + gain / (loss + 1e-10)))
+        return df
 
-    def _compute_atr(self, df: pd.DataFrame) -> pd.Series:
+    def _add_atr(self, df: pd.DataFrame) -> pd.DataFrame:
         hl  = df['high'] - df['low']
         hcp = abs(df['high'] - df['close'].shift())
         lcp = abs(df['low']  - df['close'].shift())
         tr  = pd.concat([hl, hcp, lcp], axis=1).max(axis=1)
-        return tr.rolling(self.ATR_PERIOD).mean()
+        df['atr'] = tr.rolling(self.ATR_PERIOD).mean()
+        return df
 
-    def analyze(self, df: pd.DataFrame) -> TradeSetup:
+    def _add_vwap(self, df: pd.DataFrame) -> pd.DataFrame:
+        df['vwap'] = df['close'].ewm(span=20, adjust=False).mean()
+        return df
+
+    def _prepare_1h(self, df: pd.DataFrame) -> pd.DataFrame:
+        close = df['close']
+        df['ema200'] = close.ewm(span=self.EMA_TREND, adjust=False).mean()
+        df = self._add_adx(df)
+        trend_regime = (df['adx'] > self.ADX_MIN) & (df['adx'] < self.ADX_MAX)
+        df['bias_bull'] = (
+            (close > df['ema200']) &
+            trend_regime &
+            (df['plus_di'] > df['minus_di'])
+        )
+        df['bias_bear'] = (
+            (close < df['ema200']) &
+            trend_regime &
+            (df['minus_di'] > df['plus_di'])
+        )
+        return df.dropna()
+
+    def _prepare_15m(self, df: pd.DataFrame) -> pd.DataFrame:
+        close = df['close']
+        df['ema20'] = close.ewm(span=self.EMA_FAST, adjust=False).mean()
+        df['ema50'] = close.ewm(span=self.EMA_SLOW, adjust=False).mean()
+        df = self._add_rsi(df)
+        df = self._add_vwap(df)
+        df['setup_bull'] = (
+            (df['ema20'] > df['ema50']) &
+            (df['rsi'] > 45) & (df['rsi'] < 75) &
+            (close > df['vwap'] * 0.9998)
+        )
+        df['setup_bear'] = (
+            (df['ema20'] < df['ema50']) &
+            (df['rsi'] < 55) & (df['rsi'] > 25) &
+            (close < df['vwap'] * 1.0002)
+        )
+        return df.dropna()
+
+    def analyze(self, df_5m: pd.DataFrame) -> TradeSetup:
+        none = TradeSetup(Signal.NONE, 0, 0, 0, 0, 0, "Sin senal")
+
         if not self.is_valid_session():
             return TradeSetup(Signal.NONE, 0, 0, 0, 0, 0, "Fuera de sesion")
 
-        if len(df) < self.EMA_TREND + 10:
-            return TradeSetup(Signal.NONE, 0, 0, 0, 0, 0, "Pocas velas")
+        if self._df_1h is None or self._df_15m is None:
+            return TradeSetup(Signal.NONE, 0, 0, 0, 0, 0, "Sin datos HTF")
 
-        close    = df['close']
-        high     = df['high']
-        low      = df['low']
-        open_    = df['open']
+        if len(df_5m) < 30:
+            return TradeSetup(Signal.NONE, 0, 0, 0, 0, 0, "Pocas velas 5M")
 
-        rsi       = self._compute_rsi(close)
-        atr       = self._compute_atr(df)
-        ema_fast  = close.ewm(span=self.EMA_FAST,  adjust=False).mean()
-        ema_slow  = close.ewm(span=self.EMA_SLOW,  adjust=False).mean()
-        ema_trend = close.ewm(span=self.EMA_TREND, adjust=False).mean()
+        # Preparar 5M
+        df = df_5m.copy()
+        df = self._add_atr(df)
+        close = df['close']
+        df['ema9']  = close.ewm(span=9,  adjust=False).mean()
+        df['ema21'] = close.ewm(span=21, adjust=False).mean()
+        df = df.dropna()
 
-        curr_close = float(close.iloc[-1])
-        curr_open  = float(open_.iloc[-1])
-        curr_high  = float(high.iloc[-1])
-        curr_low   = float(low.iloc[-1])
-        curr_rsi   = float(rsi.iloc[-1])
-        curr_atr   = float(atr.iloc[-1])
-        curr_trend = float(ema_trend.iloc[-1])
-        curr_fast  = float(ema_fast.iloc[-1])
-        curr_slow  = float(ema_slow.iloc[-1])
+        if len(df) < 3:
+            return none
 
-        sl_pips = curr_atr * self.ATR_SL_MULT / 0.0001
-
+        curr_atr  = float(df['atr'].iloc[-1])
         if curr_atr < self.ATR_MIN:
             return TradeSetup(Signal.NONE, 0, 0, 0, 0, 0, "ATR bajo")
 
-        # Rango de las ultimas N velas (sin incluir la actual)
-        range_high = float(high.iloc[-self.RANGE_PERIOD-1:-1].max())
-        range_low  = float(low.iloc[-self.RANGE_PERIOD-1:-1].min())
+        # Cruce EMA 9/21 en 5M
+        prev = df.iloc[-2]
+        curr = df.iloc[-1]
+        ema9_up   = float(prev['ema9']) <= float(prev['ema21']) and \
+                    float(curr['ema9']) >  float(curr['ema21'])
+        ema9_down = float(prev['ema9']) >= float(prev['ema21']) and \
+                    float(curr['ema9']) <  float(curr['ema21'])
 
-        # Fuerza de la vela actual
-        candle_body  = abs(curr_close - curr_open)
-        candle_range = curr_high - curr_low
-        body_ratio   = candle_body / (candle_range + 1e-10)
+        # Contexto 1H
+        ts     = df.index[-1]
+        idx_1h = self._df_1h.index.searchsorted(ts) - 1
+        if idx_1h < 0 or idx_1h >= len(self._df_1h):
+            return none
+        row_1h = self._df_1h.iloc[idx_1h]
 
-        # EMA momentum
-        ema_bullish = curr_fast > curr_slow
-        ema_bearish = curr_fast < curr_slow
+        # Setup 15M
+        idx_15m = self._df_15m.index.searchsorted(ts) - 1
+        if idx_15m < 0 or idx_15m >= len(self._df_15m):
+            return none
+        row_15m = self._df_15m.iloc[idx_15m]
 
-        # --- SEÑAL BUY ---
-        # Ruptura del maximo del rango + vela alcista fuerte + tendencia alcista
-        breakout_up = curr_close > range_high + self.BREAKOUT_CONF
-        candle_bull = curr_close > curr_open and body_ratio > 0.5
-        trend_up    = curr_close > curr_trend and ema_bullish
-        rsi_ok_buy  = 40 < curr_rsi < 75
+        entry   = float(curr['close'])
+        sl_pips = curr_atr * self.ATR_SL_MULT / 0.0001
 
-        if breakout_up and candle_bull and trend_up and rsi_ok_buy:
-            sl = range_high - curr_atr * 0.5
-            tp = curr_close + (curr_close - sl) * self.RR_RATIO
+        # BUY
+        if row_1h['bias_bull'] and row_15m['setup_bull'] and ema9_up:
+            sl = entry - curr_atr * self.ATR_SL_MULT
+            tp = entry + curr_atr * self.ATR_SL_MULT * self.RR_RATIO
             return TradeSetup(
-                Signal.BUY, curr_close, sl, tp, sl_pips, self.RR_RATIO,
-                f"BUY | Breakout {range_high:.5f} | RSI={curr_rsi:.1f}"
+                Signal.BUY, entry, sl, tp, sl_pips, self.RR_RATIO,
+                f"BUY | 1H ADX={row_1h['adx']:.0f} | 15M RSI={row_15m['rsi']:.0f} | EMA9 cross",
+                self.TRAIL_MULT
             )
 
-        # --- SEÑAL SELL ---
-        # Ruptura del minimo del rango + vela bajista fuerte + tendencia bajista
-        breakout_down = curr_close < range_low - self.BREAKOUT_CONF
-        candle_bear   = curr_close < curr_open and body_ratio > 0.5
-        trend_down    = curr_close < curr_trend and ema_bearish
-        rsi_ok_sell   = 25 < curr_rsi < 60
-
-        if breakout_down and candle_bear and trend_down and rsi_ok_sell:
-            sl = range_low + curr_atr * 0.5
-            tp = curr_close - (sl - curr_close) * self.RR_RATIO
+        # SELL
+        if row_1h['bias_bear'] and row_15m['setup_bear'] and ema9_down:
+            sl = entry + curr_atr * self.ATR_SL_MULT
+            tp = entry - curr_atr * self.ATR_SL_MULT * self.RR_RATIO
             return TradeSetup(
-                Signal.SELL, curr_close, sl, tp, sl_pips, self.RR_RATIO,
-                f"SELL | Breakout {range_low:.5f} | RSI={curr_rsi:.1f}"
+                Signal.SELL, entry, sl, tp, sl_pips, self.RR_RATIO,
+                f"SELL | 1H ADX={row_1h['adx']:.0f} | 15M RSI={row_15m['rsi']:.0f} | EMA9 cross",
+                self.TRAIL_MULT
             )
 
-        return TradeSetup(Signal.NONE, 0, 0, 0, 0, 0, "Sin breakout")
+        return none

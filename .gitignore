@@ -1,0 +1,19 @@
+# Entorno virtual
+ftmo_env/
+
+# Credenciales
+.env
+
+# Python compilado
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/bot.log
+
+# Datos CSV (son muy pesados)
+backtest/data/
+
+# Temporales
+txt.txt

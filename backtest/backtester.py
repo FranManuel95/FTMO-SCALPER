@@ -1,4 +1,4 @@
-# backtest/backtester.py — Multi-Timeframe: 1H + 15M + 5M
+# backtest/backtester.py — MTF + ADX + VWAP + Trailing Stop
 
 import pandas as pd
 import numpy as np
@@ -30,9 +30,9 @@ class BacktestResult:
         )
 
     def print_report(self):
-        sep = "-" * 45
+        sep = "-" * 50
         print(f"\n{sep}")
-        print("  BACKTEST REPORT - FTMO SCALPER MTF")
+        print("  BACKTEST REPORT - FTMO SCALPER MTF v2")
         print(sep)
         print(f"  Trades totales   : {self.total_trades}")
         print(f"  Win Rate         : {self.win_rate*100:.1f}%  (min 45%)")
@@ -54,16 +54,18 @@ class BacktestResult:
 
 class FTMOBacktester:
 
-    EMA_TREND   = 200
-    EMA_FAST    = 20
-    EMA_SLOW    = 50
-    ADX_PERIOD  = 14
-    ADX_MIN     = 15
-    RSI_PERIOD  = 14
-    ATR_PERIOD  = 14
-    ATR_SL_MULT = 1.2
-    RR_RATIO    = 1.6
-    ATR_MIN     = 0.0003
+    EMA_TREND    = 200
+    EMA_FAST     = 20
+    EMA_SLOW     = 50
+    ADX_PERIOD   = 14
+    ADX_MIN      = 20
+    ADX_MAX      = 58
+    RSI_PERIOD   = 14
+    ATR_PERIOD   = 14
+    ATR_SL_MULT  = 1.0
+    RR_RATIO     = 1.4
+    ATR_MIN      = 0.0003
+    TRAIL_MULT   = 2.0
 
     def __init__(self, initial_balance: float = 10000,
                  risk_per_trade: float = 0.005,
@@ -72,30 +74,27 @@ class FTMOBacktester:
         self.risk_per_trade  = risk_per_trade
         self.rr_ratio        = rr_ratio
 
-    def load_data(self) -> tuple:
+    def load_data(self, symbol: str = "EURUSD") -> tuple:
         def read(path):
             df = pd.read_csv(path, index_col=0, parse_dates=True)
             df.columns = [c.lower() for c in df.columns]
             return df.sort_index()
-
-        df_5m  = read("backtest/data/EURUSD_5M.csv")
-        df_15m = read("backtest/data/EURUSD_15M.csv")
-        df_1h  = read("backtest/data/EURUSD_1H.csv")
+        df_5m  = read(f"backtest/data/{symbol}_5M.csv")
+        df_15m = read(f"backtest/data/{symbol}_15M.csv")
+        df_1h  = read(f"backtest/data/{symbol}_1H.csv")
         print(f"5M: {len(df_5m)} | 15M: {len(df_15m)} | 1H: {len(df_1h)} velas")
         return df_5m, df_15m, df_1h
 
-    def _add_ema(self, df: pd.DataFrame, span: int, col: str) -> pd.DataFrame:
+    def _add_ema(self, df, span, col):
         df[col] = df['close'].ewm(span=span, adjust=False).mean()
         return df
 
-    def _add_adx(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_adx(self, df):
         high  = df['high']
         low   = df['low']
         close = df['close']
-        plus_dm  = high.diff()
-        minus_dm = -low.diff()
-        plus_dm[plus_dm < 0]   = 0
-        minus_dm[minus_dm < 0] = 0
+        plus_dm  = high.diff().clip(lower=0)
+        minus_dm = (-low.diff()).clip(lower=0)
         tr = pd.concat([
             high - low,
             (high - close.shift()).abs(),
@@ -110,61 +109,75 @@ class FTMOBacktester:
         df['minus_di'] = minus_di
         return df
 
-    def _add_rsi(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_rsi(self, df):
         delta = df['close'].diff()
         gain  = delta.where(delta > 0, 0).rolling(self.RSI_PERIOD).mean()
         loss  = (-delta.where(delta < 0, 0)).rolling(self.RSI_PERIOD).mean()
         df['rsi'] = 100 - (100 / (1 + gain / (loss + 1e-10)))
         return df
 
-    def _add_atr(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_atr(self, df):
         hl  = df['high'] - df['low']
         hcp = (df['high'] - df['close'].shift()).abs()
         lcp = (df['low']  - df['close'].shift()).abs()
         df['atr'] = pd.concat([hl, hcp, lcp], axis=1).max(axis=1).rolling(self.ATR_PERIOD).mean()
         return df
 
-    def _prepare_1h(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _add_vwap(self, df):
+        df['vwap'] = df['close'].ewm(span=20, adjust=False).mean()
+        return df
+
+    def _prepare_1h(self, df):
         df = self._add_ema(df, self.EMA_TREND, 'ema200')
         df = self._add_adx(df)
+        trend_regime = (df['adx'] > self.ADX_MIN) & (df['adx'] < self.ADX_MAX)
         df['bias_bull'] = (
             (df['close'] > df['ema200']) &
-            (df['adx'] > self.ADX_MIN) &
+            trend_regime &
             (df['plus_di'] > df['minus_di'])
         )
         df['bias_bear'] = (
             (df['close'] < df['ema200']) &
-            (df['adx'] > self.ADX_MIN) &
+            trend_regime &
             (df['minus_di'] > df['plus_di'])
         )
         return df.dropna()
 
-    def _prepare_15m(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _prepare_15m(self, df):
         df = self._add_ema(df, self.EMA_FAST, 'ema20')
         df = self._add_ema(df, self.EMA_SLOW, 'ema50')
         df = self._add_rsi(df)
+        df = self._add_vwap(df)
         df['setup_bull'] = (
             (df['ema20'] > df['ema50']) &
-            (df['rsi'] > 45) &
-            (df['rsi'] < 75)
+            (df['rsi'] > 45) & (df['rsi'] < 75) &
+            (df['close'] > df['vwap'] * 0.9998)
         )
         df['setup_bear'] = (
             (df['ema20'] < df['ema50']) &
-            (df['rsi'] < 55) &
-            (df['rsi'] > 25)
+            (df['rsi'] < 55) & (df['rsi'] > 25) &
+            (df['close'] < df['vwap'] * 1.0002)
         )
         return df.dropna()
 
-    def _prepare_5m(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _prepare_5m(self, df):
         df = self._add_atr(df)
         df = self._add_ema(df, 9,  'ema9')
         df = self._add_ema(df, 21, 'ema21')
-        df['hour']    = df.index.hour
+        df['hour']  = df.index.hour
+        df['month'] = df.index.month
+        df['day']   = df.index.day
         df['session'] = (df['hour'] >= 7) & (df['hour'] < 17)
+        # Filtro navideño: 20 Dic - 3 Ene
+        xmas = ~(
+            ((df['month'] == 12) & (df['day'] >= 20)) |
+            ((df['month'] == 1)  & (df['day'] <= 3))
+        )
+        df['session'] = df['session'] & xmas
         return df.dropna()
 
-    def run(self) -> BacktestResult:
-        df_5m, df_15m, df_1h = self.load_data()
+    def run(self, symbol: str = "EURUSD") -> BacktestResult:
+        df_5m, df_15m, df_1h = self.load_data(symbol)
 
         df_1h  = self._prepare_1h(df_1h)
         df_15m = self._prepare_15m(df_15m)
@@ -174,7 +187,7 @@ class FTMOBacktester:
         equity_curve = [balance]
         trades       = []
 
-        for i in range(50, len(df_5m) - 10):
+        for i in range(50, len(df_5m) - 20):
             row_5m = df_5m.iloc[i]
             ts     = df_5m.index[i]
 
@@ -184,50 +197,54 @@ class FTMOBacktester:
             curr_atr = float(row_5m['atr'])
             if curr_atr < self.ATR_MIN: continue
 
-            # Contexto 1H
             idx_1h = df_1h.index.searchsorted(ts) - 1
             if idx_1h < 0 or idx_1h >= len(df_1h): continue
             row_1h = df_1h.iloc[idx_1h]
 
-            # Setup 15M
             idx_15m = df_15m.index.searchsorted(ts) - 1
             if idx_15m < 0 or idx_15m >= len(df_15m): continue
             row_15m = df_15m.iloc[idx_15m]
 
-            # Cruce EMA 9/21 en 5M
-            prev_5m = df_5m.iloc[i - 1]
-            ema9_cross_up   = (float(prev_5m['ema9']) <= float(prev_5m['ema21'])) and \
-                              (float(row_5m['ema9'])  >  float(row_5m['ema21']))
-            ema9_cross_down = (float(prev_5m['ema9']) >= float(prev_5m['ema21'])) and \
-                              (float(row_5m['ema9'])  <  float(row_5m['ema21']))
+            prev_5m   = df_5m.iloc[i - 1]
+            ema9_up   = (float(prev_5m['ema9']) <= float(prev_5m['ema21'])) and \
+                        (float(row_5m['ema9'])  >  float(row_5m['ema21']))
+            ema9_down = (float(prev_5m['ema9']) >= float(prev_5m['ema21'])) and \
+                        (float(row_5m['ema9'])  <  float(row_5m['ema21']))
 
             signal = None
             entry  = float(row_5m['close'])
 
-            if row_1h['bias_bull'] and row_15m['setup_bull'] and ema9_cross_up:
+            if row_1h['bias_bull'] and row_15m['setup_bull'] and ema9_up:
                 signal = 'BUY'
                 sl = entry - curr_atr * self.ATR_SL_MULT
                 tp = entry + curr_atr * self.ATR_SL_MULT * self.rr_ratio
 
-            elif row_1h['bias_bear'] and row_15m['setup_bear'] and ema9_cross_down:
+            elif row_1h['bias_bear'] and row_15m['setup_bear'] and ema9_down:
                 signal = 'SELL'
                 sl = entry + curr_atr * self.ATR_SL_MULT
                 tp = entry - curr_atr * self.ATR_SL_MULT * self.rr_ratio
 
             if not signal: continue
 
-            risk_amt = balance * self.risk_per_trade
-            won = False
+            risk_amt  = balance * self.risk_per_trade
+            won       = False
+            trail_sl  = sl
 
-            for j in range(i + 1, min(i + 20, len(df_5m))):
-                fh = float(df_5m.iloc[j]['high'])
-                fl = float(df_5m.iloc[j]['low'])
+            for j in range(i + 1, min(i + 30, len(df_5m))):
+                fh      = float(df_5m.iloc[j]['high'])
+                fl      = float(df_5m.iloc[j]['low'])
+                fut_atr = float(df_5m.iloc[j]['atr'])
+
                 if signal == 'BUY':
-                    if fh >= tp: won = True;  break
-                    if fl <= sl: won = False; break
+                    new_trail = fh - fut_atr * self.TRAIL_MULT
+                    trail_sl  = max(trail_sl, new_trail)
+                    if fh >= tp:       won = True;  break
+                    if fl <= trail_sl: won = False; break
                 else:
-                    if fl <= tp: won = True;  break
-                    if fh >= sl: won = False; break
+                    new_trail = fl + fut_atr * self.TRAIL_MULT
+                    trail_sl  = min(trail_sl, new_trail)
+                    if fl <= tp:       won = True;  break
+                    if fh >= trail_sl: won = False; break
 
             pnl = risk_amt * self.rr_ratio if won else -risk_amt
             balance += pnl
@@ -236,9 +253,9 @@ class FTMOBacktester:
 
         return self._compute_metrics(trades, equity_curve)
 
-    def _compute_metrics(self, trades: list, equity_curve: list) -> BacktestResult:
+    def _compute_metrics(self, trades, equity_curve):
         if not trades:
-            raise ValueError("Sin trades. Revisar filtros.")
+            raise ValueError("Sin trades.")
 
         pnls   = np.array([t['pnl'] for t in trades])
         wins   = [t for t in trades if t['won']]

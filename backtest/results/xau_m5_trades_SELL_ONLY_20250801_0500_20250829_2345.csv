@@ -1,0 +1,2 @@
+trade_id,trade_date,entry_hour,side,entry_time,exit_time,entry,exit,sl,tp,risk_distance,bars_in_trade,pnl,r_multiple,exit_reason,be_activated,mfe_r,mae_r,best_r,worst_r,orb_high,orb_low,atr_at_entry,adx_h1_at_entry,balance_after
+1,2025-08-12,9,SELL,2025-08-12 09:50:00,2025-08-12 10:35:00,3347.13,3355.8958370614096,3355.8958370614096,3333.981244407886,8.765837061409457,10,-50.0,-1.0,sl,False,0.4073,1.2469,0.4073,1.2469,3355.63,3348.48,2.6583706140941143,32.49406721681345,9950.0
