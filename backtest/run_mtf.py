@@ -65,8 +65,6 @@ def run_symbol(symbol: str) -> dict:
                 sl      =("exit_reason", lambda s: int((s == "sl").sum())),
                 be      =("exit_reason", lambda s: int((s == "be").sum())),
                 timeout =("exit_reason", lambda s: int((s == "timeout").sum())),
-                cross   =("mode", lambda s: int((s == "CROSS").sum())),
-                pull    =("mode", lambda s: int((s == "PULL").sum())),
             )
             .reset_index()
         )
@@ -76,15 +74,17 @@ def run_symbol(symbol: str) -> dict:
         print(f"\n  Resumen mensual:")
         print(monthly.to_string(index=False))
 
-        # Breakdown por modo de entrada
-        if "mode" in trades_df.columns:
-            print(f"\n  Breakdown por modo:")
-            mode_grp = trades_df.groupby("mode").agg(
+        # Breakdown por patrón de entrada
+        if "pattern" in trades_df.columns:
+            print(f"\n  Breakdown por patrón:")
+            pat_grp = trades_df.groupby("pattern").agg(
                 trades =("pnl", "count"),
                 wr     =("won", "mean"),
                 pnl    =("pnl", "sum"),
+                tp     =("exit_reason", lambda s: int((s == "tp").sum())),
+                sl     =("exit_reason", lambda s: int((s == "sl").sum())),
             ).round(3)
-            print(mode_grp.to_string())
+            print(pat_grp.to_string())
 
     ftmo_ok = (
         result.win_rate       >= 0.45 and

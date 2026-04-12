@@ -49,11 +49,12 @@ class MTFBacktester:
     M5_ATR_MIN     = 0.0003
 
     # ── Zona S/R: precio dentro de N×ATR de EMA para considerar toque ──────
-    SR_ZONE_ATR    = 0.6    # 0.6×ATR alrededor de EMA50/200
+    SR_ZONE_ATR    = 0.4    # 0.4×ATR alrededor de EMA50/200 (ajustado de 0.6)
 
     # ── Patrones de vela ───────────────────────────────────────────────────
     ENGULF_MIN_RATIO = 1.05  # cuerpo engullidor ≥ 105% del cuerpo anterior
     HAMMER_WICK_MULT = 1.8   # mecha ≥ 1.8× el cuerpo
+    MIN_CANDLE_ATR   = 0.15  # rango mínimo de la vela gatillo (% del ATR)
 
     # ── Sesiones UTC ───────────────────────────────────────────────────────
     LONDON_OPEN    = 7
@@ -62,10 +63,10 @@ class MTFBacktester:
     NY_CLOSE       = 20
 
     # ── Gestión ────────────────────────────────────────────────────────────
-    RR_RATIO           = 2.0
-    SL_BUFFER_ATR      = 0.15   # buffer extra debajo/encima del mínimo/máximo
-    MAX_SL_ATR         = 3.0    # SL máximo permitido (evita SL absurdamente grandes)
-    MAX_BARS_IN_TRADE  = 48     # 4h máximo
+    RR_RATIO           = 1.5
+    SL_BUFFER_ATR      = 0.10   # buffer extra debajo/encima del mínimo/máximo
+    MAX_SL_ATR         = 1.2    # SL máximo en ATR: evita entradas con SL >~8 pips
+    MAX_BARS_IN_TRADE  = 36     # 3h máximo
     MAX_TRADES_DAY     = 2
     FRIDAY_CLOSE_HOUR  = 21
     BREAKEVEN_TRIGGER  = 1.0    # mover SL a BE cuando ganancia ≥ 1.0R
@@ -276,21 +277,25 @@ class MTFBacktester:
         """
         Precio cerca de EMA50_M5 o EMA200_M5 como soporte.
         'Cerca' = dentro de SR_ZONE_ATR × ATR de la EMA.
-        Además, la vela debe estar tocando la zona desde arriba (precio ≥ EMA).
+        Precio puede estar ligeramente por debajo (hasta 0.5×zone) para
+        capturar rechazos que perforan brevemente el nivel.
         """
         zone = atr_val * self.SR_ZONE_ATR
-        near50  = abs(close - ema50)  < zone and close >= ema50  * 0.9995
-        near200 = abs(close - ema200) < zone and close >= ema200 * 0.9995
+        # Precio ≥ EMA - 0.5×zone (no más de medio zone por debajo)
+        near50  = abs(close - ema50)  < zone and close >= ema50  - zone * 0.5
+        near200 = abs(close - ema200) < zone and close >= ema200 - zone * 0.5
         return near50 or near200
 
     def _near_resistance(self, close: float, ema50: float, ema200: float,
                          atr_val: float) -> bool:
         """
-        Precio cerca de EMA50_M5 o EMA200_M5 como resistencia (desde abajo).
+        Precio cerca de EMA50_M5 o EMA200_M5 como resistencia.
+        Precio puede estar ligeramente por encima (hasta 0.5×zone) para
+        capturar rechazos que perforan brevemente el nivel.
         """
         zone = atr_val * self.SR_ZONE_ATR
-        near50  = abs(close - ema50)  < zone and close <= ema50  * 1.0005
-        near200 = abs(close - ema200) < zone and close <= ema200 * 1.0005
+        near50  = abs(close - ema50)  < zone and close <= ema50  + zone * 0.5
+        near200 = abs(close - ema200) < zone and close <= ema200 + zone * 0.5
         return near50 or near200
 
     # ─────────────────────────────────────────────
@@ -345,10 +350,19 @@ class MTFBacktester:
             ema50    = float(row["ema50"])
             ema200   = float(row["ema200"])
 
-            rsi_bull = 40 <= rsi5 <= 70
-            rsi_bear = 30 <= rsi5 <= 60
+            rsi_bull = 35 <= rsi5 <= 65
+            rsi_bear = 35 <= rsi5 <= 65
             vwap_bull = close > vwap
             vwap_bear = close < vwap
+
+            # ── Alineación EMA en M5 (confirma mini-tendencia) ──────────────
+            m5_ema_bull = ema50 > ema200
+            m5_ema_bear = ema50 < ema200
+
+            # ── Tamaño mínimo de la vela (filtra dojis y microvelas) ─────────
+            curr_range = float(row["high"]) - float(row["low"])
+            if curr_range < curr_atr * self.MIN_CANDLE_ATR:
+                continue
 
             # ── Zona S/R en M5 ──────────────────────────────────────────────
             near_sup = self._near_support(close, ema50, ema200, curr_atr)
@@ -362,12 +376,12 @@ class MTFBacktester:
             signal  = None
             pattern = None
 
-            if (h1_bull and m15_bull and rsi_bull and vwap_bull and
+            if (h1_bull and m15_bull and m5_ema_bull and rsi_bull and vwap_bull and
                     near_sup and bull_pattern):
                 signal  = "BUY"
                 pattern = bull_pattern
 
-            elif (h1_bear and m15_bear and rsi_bear and vwap_bear and
+            elif (h1_bear and m15_bear and m5_ema_bear and rsi_bear and vwap_bear and
                     near_res and bear_pattern):
                 signal  = "SELL"
                 pattern = bear_pattern
