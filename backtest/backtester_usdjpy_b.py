@@ -290,7 +290,8 @@ class USDJPYBacktesterB:
                 if not (conf_close < conf_open and conf_close < conf_ema21):
                     continue
 
-            # ── Construcción del trade — SL bajo/sobre EMA21 de la vela de confirmación ──
+            # ── Construcción del trade — entramos al cierre de la vela de confirmación ──
+            entry = conf_close
             if pullback_dir == "BUY":
                 sl            = conf_ema21 - curr_atr * self.ATR_SL_MULT
                 risk_distance = entry - sl
