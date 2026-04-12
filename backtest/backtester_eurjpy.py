@@ -1,5 +1,3 @@
-# backtest/backtester_eurjpy.py
-
 import os
 import pandas as pd
 import numpy as np
@@ -17,6 +15,7 @@ class EURJPYBacktester:
     - Resolución conservadora de velas ambiguas
     - Timeout real al precio de cierre
     - Registro detallado de trades
+    - Stop híbrido: estructura + ATR
     """
 
     EMA_FAST = 20
@@ -26,15 +25,15 @@ class EURJPYBacktester:
     ATR_PERIOD = 14
 
     MAX_TRADES_DAY = 1
+    MAX_HOLD_BARS = 24
 
     ASIA_START = 0
     ASIA_END = 7
 
     SESSION_START = 7
-    SESSION_END = 12
+    SESSION_END = 13
 
     FRIDAY_CUTOFF_HOUR = 12
-    MAX_HOLD_BARS = 24
 
     SPREAD = 0.015
     SLIPPAGE = 0.003
@@ -51,16 +50,16 @@ class EURJPYBacktester:
         symbol: str = "EURJPY",
         export_trades: bool = True,
         session_start: int = 7,
-        session_end: int = 12,
+        session_end: int = 13,
         asia_start: int = 0,
         asia_end: int = 7,
-        adx_min: float = 20,
+        adx_min: float = 18,
         adx_max: float = 50,
-        atr_min: float = 0.10,
-        breakout_buffer_atr: float = 0.10,
-        min_body_ratio: float = 0.55,
-        range_atr_min: float = 0.8,
-        range_atr_cap: float = 3.5,
+        atr_min: float = 0.08,
+        breakout_buffer_atr: float = 0.05,
+        min_body_ratio: float = 0.35,
+        range_atr_min: float = 0.4,
+        range_atr_cap: float = 4.0,
         trade_mode: str = "BOTH",
         friday_cutoff_hour: int = 12,
     ):
@@ -92,7 +91,7 @@ class EURJPYBacktester:
         df = pd.read_csv(
             f"backtest/data/{self.symbol}_5M.csv",
             index_col=0,
-            parse_dates=True
+            parse_dates=True,
         )
         df.columns = [c.lower() for c in df.columns]
         return df.sort_index()
@@ -154,11 +153,8 @@ class EURJPYBacktester:
             if asia.empty:
                 continue
 
-            asia_high = float(asia["high"].max())
-            asia_low = float(asia["low"].min())
-
-            df.loc[df["date"] == date, "asia_high"] = asia_high
-            df.loc[df["date"] == date, "asia_low"] = asia_low
+            df.loc[df["date"] == date, "asia_high"] = float(asia["high"].max())
+            df.loc[df["date"] == date, "asia_low"] = float(asia["low"].min())
 
         df["asia_range"] = df["asia_high"] - df["asia_low"]
         return df
@@ -215,7 +211,7 @@ class EURJPYBacktester:
             "open", "high", "low", "close",
             "atr", "adx", "ema_fast", "ema_slow",
             "asia_high", "asia_low", "asia_range",
-            "hour", "day", "month", "date", "weekday"
+            "hour", "day", "month", "date", "weekday",
         ]
         df = df.dropna(subset=cols).copy()
         return df
@@ -229,6 +225,7 @@ class EURJPYBacktester:
             f"Session: {self.session_start}-{self.session_end} | "
             f"Asia: {self.asia_start}-{self.asia_end} | "
             f"ADX: {self.adx_min}-{self.adx_max} | "
+            f"ATR_MIN: {self.atr_min} | "
             f"RR: {self.rr_ratio} | SLxATR: {self.atr_sl_mult}"
         )
 
@@ -281,14 +278,13 @@ class EURJPYBacktester:
             ema_bear = float(row["ema_fast"]) < float(row["ema_slow"])
 
             curr_close = float(row["close"])
-            prev_close = float(prev["close"])
             curr_high = float(row["high"])
             curr_low = float(row["low"])
 
             buffer_val = curr_atr * self.breakout_buffer_atr
 
-            breakout_up = prev_close <= asia_high and curr_close > (asia_high + buffer_val)
-            breakout_dn = prev_close >= asia_low and curr_close < (asia_low - buffer_val)
+            breakout_up = (curr_high > (asia_high + buffer_val)) and (curr_close > asia_high)
+            breakout_dn = (curr_low < (asia_low - buffer_val)) and (curr_close < asia_low)
 
             signal_val = None
             signal_time = df.index[i]
@@ -311,27 +307,22 @@ class EURJPYBacktester:
 
             if signal_val == "BUY":
                 entry = raw_entry + self.SPREAD / 2 + self.SLIPPAGE
-                signal_sl = min(curr_low, asia_high)
-                sl = signal_sl - curr_atr * 0.10
+
+                structural_sl = min(curr_low, asia_high) - curr_atr * 0.10
+                atr_sl = entry - curr_atr * self.atr_sl_mult
+                sl = min(structural_sl, atr_sl)
+
                 risk_per_unit = entry - sl
                 tp = entry + risk_per_unit * self.rr_ratio
             else:
                 entry = raw_entry - self.SPREAD / 2 - self.SLIPPAGE
-                signal_sl = max(curr_high, asia_low)
-                sl = signal_sl + curr_atr * 0.10
+
+                structural_sl = max(curr_high, asia_low) + curr_atr * 0.10
+                atr_sl = entry + curr_atr * self.atr_sl_mult
+                sl = max(structural_sl, atr_sl)
+
                 risk_per_unit = sl - entry
                 tp = entry - risk_per_unit * self.rr_ratio
-
-            # Salvavidas: si por estructura el SL sale mal, usar ATR puro
-            if risk_per_unit <= 0:
-                if signal_val == "BUY":
-                    sl = entry - curr_atr * self.atr_sl_mult
-                    risk_per_unit = entry - sl
-                    tp = entry + risk_per_unit * self.rr_ratio
-                else:
-                    sl = entry + curr_atr * self.atr_sl_mult
-                    risk_per_unit = sl - entry
-                    tp = entry - risk_per_unit * self.rr_ratio
 
             if risk_per_unit <= 0:
                 continue

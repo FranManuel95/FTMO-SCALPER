@@ -1,16 +1,15 @@
-# backtest/run_eurjpy_small_grid.py
-
 from itertools import product
 from backtest.backtester_eurjpy import EURJPYBacktester
 
 
 def main():
-    session_windows = [(7, 11), (7, 12), (8, 12)]
-    adx_ranges = [(18, 45), (20, 50), (22, 50)]
-    rr_ratios = [1.3, 1.4, 1.6]
-    atr_sl_mults = [1.0, 1.2, 1.4]
-    breakout_buffers = [0.05, 0.10, 0.15]
-    body_ratios = [0.45, 0.55, 0.65]
+    session_windows = [(7, 13), (7, 14)]
+    adx_ranges = [(18, 50), (20, 50)]
+    rr_ratios = [1.3, 1.4]
+    atr_sl_mults = [1.0, 1.2]
+    breakout_buffers = [0.0, 0.05]
+    body_ratios = [0.25, 0.35]
+    trade_modes = ["BOTH", "BUY_ONLY", "SELL_ONLY"]
 
     combos = list(product(
         session_windows,
@@ -19,11 +18,13 @@ def main():
         atr_sl_mults,
         breakout_buffers,
         body_ratios,
+        trade_modes,
     ))
 
-    print(f"Lanzando grid EURJPY pequeño con {len(combos)} combinaciones...\n")
+    print(f"Lanzando grid EURJPY reducido con {len(combos)} combinaciones...\n")
 
-    best = []
+    rows = []
+    min_trades_required = 30
 
     for idx, (
         session_window,
@@ -32,6 +33,7 @@ def main():
         atr_sl_mult,
         breakout_buffer,
         body_ratio,
+        trade_mode,
     ) in enumerate(combos, start=1):
         session_start, session_end = session_window
         adx_min, adx_max = adx_range
@@ -42,8 +44,9 @@ def main():
             f"ADX={adx_min}-{adx_max} | "
             f"RR={rr_ratio} | "
             f"SLxATR={atr_sl_mult} | "
-            f"BUFFER_ATR={breakout_buffer} | "
-            f"BODY={body_ratio}"
+            f"BUFFER={breakout_buffer} | "
+            f"BODY={body_ratio} | "
+            f"MODE={trade_mode}"
         )
 
         try:
@@ -59,12 +62,19 @@ def main():
                 breakout_buffer_atr=breakout_buffer,
                 min_body_ratio=body_ratio,
                 risk_per_trade=0.005,
-                atr_min=0.10,
-                range_atr_min=0.8,
-                range_atr_cap=3.5,
-                trade_mode="BOTH",
+                atr_min=0.08,
+                range_atr_min=0.4,
+                range_atr_cap=4.0,
+                trade_mode=trade_mode,
+                friday_cutoff_hour=12,
             )
+
             result = bt.run()
+
+            passes_ftmo_strict = (
+                result.passes_ftmo_filter() and
+                result.total_trades >= min_trades_required
+            )
 
             row = {
                 "session": f"{session_start}-{session_end}",
@@ -73,6 +83,7 @@ def main():
                 "atr_sl_mult": atr_sl_mult,
                 "breakout_buffer_atr": breakout_buffer,
                 "body_ratio_min": body_ratio,
+                "trade_mode": trade_mode,
                 "trades": result.total_trades,
                 "win_rate": round(result.win_rate * 100, 2),
                 "profit_factor": result.profit_factor,
@@ -84,34 +95,39 @@ def main():
                 "avg_loss": result.avg_loss,
                 "expectancy": result.expectancy,
                 "passes_ftmo": result.passes_ftmo_filter(),
+                "passes_ftmo_strict": passes_ftmo_strict,
             }
-            best.append(row)
+            rows.append(row)
 
         except Exception as e:
             print(f"Error en combinación {idx}: {e}")
 
-    if not best:
+    if not rows:
         print("No hubo resultados.")
         return
 
-    best_sorted = sorted(
-        best,
+    rows_sorted = sorted(
+        rows,
         key=lambda x: (
-            x["passes_ftmo"],
+            x["passes_ftmo_strict"],
             x["profit_factor"],
             x["sharpe"],
             x["total_return_pct"],
             -x["max_dd_pct"],
+            x["trades"],
         ),
         reverse=True
     )
 
     print("\n=== TOP 20 RESULTADOS ===")
-    for row in best_sorted[:20]:
+    for row in rows_sorted[:20]:
         print(row)
 
-    approved = [r for r in best_sorted if r["passes_ftmo"]]
-    print(f"\nAprobadas FTMO: {len(approved)} / {len(best_sorted)}")
+    strict_ok = [r for r in rows_sorted if r["passes_ftmo_strict"]]
+    print(f"\nAprobadas FTMO strict: {len(strict_ok)} / {len(rows_sorted)}")
+
+    enough_trades = [r for r in rows_sorted if r["trades"] >= min_trades_required]
+    print(f"Con al menos {min_trades_required} trades: {len(enough_trades)} / {len(rows_sorted)}")
 
 
 if __name__ == "__main__":

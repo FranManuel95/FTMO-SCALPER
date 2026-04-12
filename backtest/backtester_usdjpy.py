@@ -26,29 +26,39 @@ class USDJPYBacktester:
 
     MIN_BODY_RATIO = 0.50
     RANGE_ATR_CAP = 5.0
-    BREAK_EVEN_R = 999.0  # desactivado en esta fase
+    BREAK_EVEN_R = 999.0
 
     def __init__(
         self,
         initial_balance: float = 10000,
         risk_per_trade: float = 0.005,
         rr_ratio: float = 1.4,
-        symbol: str = "USDJPY"
+        symbol: str = "USDJPY",
+        start_date: str | None = None,
+        end_date: str | None = None,
     ):
         self.initial_balance = initial_balance
         self.risk_per_trade = risk_per_trade
         self.rr_ratio = rr_ratio
         self.symbol = symbol
+        self.start_date = start_date
+        self.end_date = end_date
         self.last_trades_detail = []
 
     def load_data(self) -> pd.DataFrame:
         df = pd.read_csv(
             f"backtest/data/{self.symbol}_5M.csv",
             index_col=0,
-            parse_dates=True
+            parse_dates=True,
         )
         df.columns = [c.lower() for c in df.columns]
         df = df.sort_index()
+
+        if self.start_date is not None:
+            df = df[df.index >= pd.Timestamp(self.start_date)]
+        if self.end_date is not None:
+            df = df[df.index <= pd.Timestamp(self.end_date)]
+
         return df
 
     def _add_atr(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -77,11 +87,13 @@ class USDJPYBacktester:
         atr = tr.rolling(self.ADX_PERIOD).mean()
 
         plus_di = (
-            100 * pd.Series(plus_dm, index=df.index).rolling(self.ADX_PERIOD).mean()
+            100
+            * pd.Series(plus_dm, index=df.index).rolling(self.ADX_PERIOD).mean()
             / (atr + 1e-10)
         )
         minus_di = (
-            100 * pd.Series(minus_dm, index=df.index).rolling(self.ADX_PERIOD).mean()
+            100
+            * pd.Series(minus_dm, index=df.index).rolling(self.ADX_PERIOD).mean()
             / (atr + 1e-10)
         )
 
@@ -150,14 +162,20 @@ class USDJPYBacktester:
             "open", "high", "low", "close",
             "atr", "adx", "ema_fast", "ema_slow",
             "vwap", "asia_high", "asia_low", "asia_range",
-            "hour", "day", "month", "date", "weekday"
+            "hour", "day", "month", "date", "weekday",
         ]
         df = df.dropna(subset=cols)
         return df
 
     def run(self) -> BacktestResult:
         df = self.prepare_dataframe()
-        print(f"{self.symbol} 5M: {len(df)} velas")
+        print(
+            f"{self.symbol} 5M: {len(df)} velas"
+            + (
+                f" | Rango: {df.index.min()} -> {df.index.max()}"
+                if len(df) else ""
+            )
+        )
 
         balance = self.initial_balance
         equity_curve = [balance]
@@ -178,8 +196,8 @@ class USDJPYBacktester:
                 continue
 
             is_xmas = (
-                (row["month"] == 12 and row["day"] >= 20) or
-                (row["month"] == 1 and row["day"] <= 3)
+                (row["month"] == 12 and row["day"] >= 20)
+                or (row["month"] == 1 and row["day"] <= 3)
             )
             if is_xmas:
                 continue
@@ -273,7 +291,6 @@ class USDJPYBacktester:
                         exit_time = df.index[j]
                         exit_price = sl
                         break
-
                 else:
                     if not moved_be and fl <= entry - risk_distance * self.BREAK_EVEN_R:
                         sl = be_price
@@ -354,7 +371,7 @@ class USDJPYBacktester:
                 avg_win=0.0,
                 avg_loss=0.0,
                 expectancy=0.0,
-                equity_curve=list(equity_curve)
+                equity_curve=list(equity_curve),
             )
 
         pnls = np.array([t["pnl"] for t in trades], dtype=float)
@@ -393,5 +410,5 @@ class USDJPYBacktester:
             avg_win=round(gp / (len(wins) + 1e-10), 2),
             avg_loss=round(gl / (len(losses) + 1e-10), 2),
             expectancy=round(float(np.mean(pnls)), 2),
-            equity_curve=list(eq)
+            equity_curve=list(eq),
         )

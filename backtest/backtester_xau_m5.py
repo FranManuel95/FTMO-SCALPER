@@ -36,6 +36,9 @@ class XAUM5Backtester:
     TRADE_START_HOUR = 9
     TRADE_END_HOUR = 16
 
+    # Horas permitidas de entrada; None = todas las horas disponibles
+    ALLOWED_ENTRY_HOURS = None  # ejemplo: {9, 13, 15}
+
     # =========================================================
     # Filtros H1
     # =========================================================
@@ -447,8 +450,10 @@ class XAUM5Backtester:
         sl: float,
         tp: float,
         risk_distance: float,
+        max_hold_bars: int = None,
     ):
-        max_hold = pd.Timedelta(minutes=5 * self.MAX_HOLD_M5_BARS)
+        max_hold_bars = int(max_hold_bars or self.MAX_HOLD_M5_BARS)
+        max_hold = pd.Timedelta(minutes=5 * max_hold_bars)
         end_time = min(signal_time + max_hold, session_end_time)
 
         future = df_m5[(df_m5.index >= signal_time) & (df_m5.index <= end_time)].copy()
@@ -461,8 +466,9 @@ class XAUM5Backtester:
         worst_r = 0.0
         bars_in_trade = 0
 
+        stagnation_check_bars = min(self.STAGNATION_CHECK_M5_BARS, max_hold_bars)
         stagnation_check_time = signal_time + pd.Timedelta(
-            minutes=5 * self.STAGNATION_CHECK_M5_BARS
+            minutes=5 * stagnation_check_bars
         )
 
         if signal_side == "BUY":
@@ -611,9 +617,14 @@ class XAUM5Backtester:
     # =========================================================
     # Backtest
     # =========================================================
-    def run(self) -> BacktestResult:
+    def run(self, hours_set=None, hold_by_hour=None) -> BacktestResult:
         df_m5 = self._prepare_frames()
         news_events = self._load_news_events()
+
+        allowed_hours = (
+            set(hours_set) if hours_set is not None
+            else (set(self.ALLOWED_ENTRY_HOURS) if self.ALLOWED_ENTRY_HOURS is not None else None)
+        )
 
         balance = self.initial_balance
         equity_curve = [balance]
@@ -687,6 +698,9 @@ class XAUM5Backtester:
 
                 ts = session.index[i]
                 entry_time = session.index[i + 1]
+
+                if allowed_hours is not None and entry_time.hour not in allowed_hours:
+                    continue
 
                 if self._in_news_blackout(ts, news_events) or self._in_news_blackout(entry_time, news_events):
                     continue
@@ -772,6 +786,12 @@ class XAUM5Backtester:
                 if signal == "SELL" and not (tp < entry < sl):
                     continue
 
+                entry_hour = int(entry_time.hour)
+                if hold_by_hour is not None and entry_hour in hold_by_hour:
+                    max_hold_bars = int(hold_by_hour[entry_hour])
+                else:
+                    max_hold_bars = int(self.MAX_HOLD_M5_BARS)
+
                 session_end_time = pd.Timestamp(entry_time.normalize()) + pd.Timedelta(hours=self.TRADE_END_HOUR)
 
                 (
@@ -792,6 +812,7 @@ class XAUM5Backtester:
                     sl=sl,
                     tp=tp,
                     risk_distance=risk_distance,
+                    max_hold_bars=max_hold_bars,
                 )
 
                 risk_amt = balance * self.risk_per_trade
@@ -821,6 +842,7 @@ class XAUM5Backtester:
                         "tp": tp,
                         "risk_distance": risk_distance,
                         "bars_in_trade": bars_in_trade,
+                        "max_hold_used": max_hold_bars,
                         "pnl": pnl,
                         "r_multiple": round(float(realized_r), 4),
                         "exit_reason": exit_reason,
@@ -911,6 +933,8 @@ class XAUM5Backtester:
                 "h1_slope_lookback": self.H1_SLOPE_LOOKBACK,
                 "min_h1_ema_spread_atr": self.MIN_H1_EMA_SPREAD_ATR,
             },
+            "allowed_entry_hours": sorted(list(allowed_hours)) if allowed_hours is not None else None,
+            "hold_by_hour": hold_by_hour if hold_by_hour is not None else None,
             "trades_csv": trades_csv_path,
         }
 
@@ -999,3 +1023,7 @@ class XAUM5Backtester:
             expectancy=round(float(np.mean(pnls)), 2),
             equity_curve=list(eq),
         )
+
+
+# Alias de compatibilidad
+XAUBacktesterM5 = XAUM5Backtester
