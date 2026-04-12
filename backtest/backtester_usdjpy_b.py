@@ -41,18 +41,19 @@ class USDJPYBacktesterB:
 
     # ── Sesión NY ──
     SESSION_START = 13   # 13:00 UTC (NY abre, London aún activo)
-    SESSION_END   = 20   # 20:00 UTC
+    SESSION_END   = 18   # 18:00 UTC — horas 18-19 mostraron WR <33% en diagnóstico
 
     # ── Gestión del trade ──
-    RR_RATIO         = 1.5
+    RR_RATIO          = 1.5
     MAX_BARS_IN_TRADE = 30   # máximo 2.5h en trade (30 × 5M)
-    MAX_TRADES_DAY   = 2     # hasta 2 entradas en NY session
-    FRIDAY_CUTOFF    = 18    # no entrar en viernes después de 18 UTC
-    MIN_BODY_RATIO   = 0.40  # breakout/confirmación candle con cuerpo definido
+    MAX_TRADES_DAY    = 2    # hasta 2 entradas en NY session
+    FRIDAY_CUTOFF     = 17   # no entrar en viernes después de 17 UTC
+    MIN_BODY_RATIO    = 0.45 # vela de confirmación necesita cuerpo claro
 
     # ── Filtro pullback ──
-    PULLBACK_ZONE_ATR = 0.6  # precio dentro de 0.6×ATR de EMA21 para considerar pullback
-    MIN_BARS_IN_TREND = 3    # EMA9 > EMA21 durante al menos 3 velas antes del pullback
+    PULLBACK_ZONE_ATR  = 0.35  # zona estrecha: precio muy cerca de EMA21
+    MIN_BARS_IN_TREND  = 5     # tendencia más establecida antes de entrar
+    CONFIRM_BODY_RATIO = 0.35  # cuerpo mínimo de la vela de confirmación
 
     def __init__(
         self,
@@ -256,7 +257,7 @@ class USDJPYBacktesterB:
             if bias == "NEUTRAL":
                 continue
 
-            # ── Señal de entrada: pullback a EMA21 ──
+            # ── Señal de pullback (barra i = toca EMA21) ──
             pullback_dir = self._is_pullback_to_ema21(df, i)
             if pullback_dir == "NONE":
                 continue
@@ -266,20 +267,36 @@ class USDJPYBacktesterB:
                (bias == "BEAR" and pullback_dir != "SELL"):
                 continue
 
-            # Cuerpo de vela mínimo (evitar dojis en zona de entrada)
-            if self._body_ratio(row) < self.MIN_BODY_RATIO:
+            # ── Vela de confirmación (barra i+1 = confirma el rebote) ──
+            # Sin look-ahead real: en live trading esperaríamos al cierre de i+1
+            if i + 1 >= len(df):
                 continue
+            conf = df.iloc[i + 1]
+            conf_close = float(conf["close"])
+            conf_open  = float(conf["open"])
+            conf_ema21 = float(conf["ema21"])
+            conf_ema9  = float(conf["ema9"])
 
-            # ── Construcción del trade ──
-            entry = float(row["close"])
-            ema21 = float(row["ema21"])
+            conf_body = self._body_ratio(conf)
+            if conf_body < self.CONFIRM_BODY_RATIO:
+                continue  # doji o vela sin convicción
 
             if pullback_dir == "BUY":
-                sl            = ema21 - curr_atr * self.ATR_SL_MULT
+                # Confirmación: cierra alcista y por encima de EMA21
+                if not (conf_close > conf_open and conf_close > conf_ema21):
+                    continue
+            else:
+                # Confirmación: cierra bajista y por debajo de EMA21
+                if not (conf_close < conf_open and conf_close < conf_ema21):
+                    continue
+
+            # ── Construcción del trade — SL bajo/sobre EMA21 de la vela de confirmación ──
+            if pullback_dir == "BUY":
+                sl            = conf_ema21 - curr_atr * self.ATR_SL_MULT
                 risk_distance = entry - sl
                 tp            = entry + risk_distance * self.rr_ratio
             else:
-                sl            = ema21 + curr_atr * self.ATR_SL_MULT
+                sl            = conf_ema21 + curr_atr * self.ATR_SL_MULT
                 risk_distance = sl - entry
                 tp            = entry - risk_distance * self.rr_ratio
 
@@ -291,11 +308,12 @@ class USDJPYBacktesterB:
             risk_amt    = balance * self.risk_per_trade
             won         = False
             exit_reason = "timeout"
-            exit_time   = df.index[min(i + self.MAX_BARS_IN_TRADE, len(df) - 1)]
+            entry_bar   = i + 1   # entramos al cierre de la vela de confirmación
+            exit_time   = df.index[min(entry_bar + self.MAX_BARS_IN_TRADE, len(df) - 1)]
             exit_price  = entry
             bars_held   = 0
 
-            for j in range(i + 1, min(i + 1 + self.MAX_BARS_IN_TRADE, len(df))):
+            for j in range(entry_bar + 1, min(entry_bar + 1 + self.MAX_BARS_IN_TRADE, len(df))):
                 fh = float(df.iloc[j]["high"])
                 fl = float(df.iloc[j]["low"])
                 bars_held = j - i
@@ -316,7 +334,7 @@ class USDJPYBacktesterB:
                         exit_time = df.index[j]; exit_price = sl; break
 
             if exit_reason == "timeout":
-                timeout_idx = min(i + self.MAX_BARS_IN_TRADE, len(df) - 1)
+                timeout_idx = min(entry_bar + self.MAX_BARS_IN_TRADE, len(df) - 1)
                 exit_time   = df.index[timeout_idx]
                 exit_price  = float(df.iloc[timeout_idx]["close"])
                 # P&L por timeout: precio real
