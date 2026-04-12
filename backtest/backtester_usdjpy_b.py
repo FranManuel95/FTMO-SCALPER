@@ -7,7 +7,10 @@
 #   v4: + Asian bias filter + RR 2.0 → 63 trades, WR 41.3%, PF 0.859 (peor)
 #       Diagnóstico: Asian bias no aporta edge. RR 2.0 genera 19% timeouts (pérdidas parciales)
 #       True WR excluyendo timeouts: 31.4% → eso explica PF 0.859
-#   v5: CORRECIONES BASADAS EN DIAGNÓSTICO v4:
+#   v6: CORRECCIONES BASADAS EN DIAGNÓSTICO v5:
+#       - SELL_ONLY = True (SELL WR=49.1% vs BUY WR=35.3% → brecha 14pp)
+#       - SESSION_END = 17 (hora 17 WR=31.8% eliminada)
+#   v5: CORRECCIONES BASADAS EN DIAGNÓSTICO v4:
 #       - USE_ASIAN_BIAS = False (sin edge estadístico, solo reduce trades)
 #       - RR_RATIO = 1.5 (de 2.0 → más alcanzable, menos timeouts)
 #       - ADX_MIN = 22 (de 18 → solo tendencias más fuertes, +WR esperada)
@@ -41,7 +44,7 @@ class USDJPYBacktesterB:
 
     # ── Sesión de trading ──
     SESSION_START  = 14   # empezamos a operar al cierre del rango NY
-    SESSION_END    = 18   # 18:00 UTC (cierre antes de fin de NY activo)
+    SESSION_END    = 17   # v6: reducido de 18→17 (hora 17 tenía WR 31.8% → eliminar)
 
     # ── Gestión del trade ──
     RR_RATIO          = 1.5    # v5: bajado de 2.0 → más alcanzable, menos timeouts
@@ -61,12 +64,18 @@ class USDJPYBacktesterB:
     RANGE_ATR_CAP     = 3.0    # rango NY no puede ser > 3×ATR (demasiado volátil)
     RANGE_MIN_PIPS    = 0.05   # rango mínimo para que valga la pena operar
 
+    # ── Filtro de dirección (v6: SELL_ONLY) ──
+    # Diagnóstico v5: SELL WR=49.1% vs BUY WR=35.3% → brecha de 14pp
+    # USDJPY NY session: JPY se fortaleció durante 2024-2026 (BoJ subiendo tipos)
+    # Solo operar en dirección con edge estadístico demostrado
+    SELL_ONLY         = True    # v6: solo ventas (BUY eliminado)
+
     # ── Filtro de sesgo asiático (desactivado en v5) ──
     # v4: activado → redujo trades 113→63 sin mejorar WR → no aporta edge real
     # v5: desactivado → restaurar volumen de trades
     ASIA_START        = 0
     ASIA_END          = 7
-    USE_ASIAN_BIAS    = False   # v5: desactivado, sin edge estadístico
+    USE_ASIAN_BIAS    = False   # sin edge estadístico
 
     def __init__(
         self,
@@ -253,9 +262,9 @@ class USDJPYBacktesterB:
             above_asian = curr_close > asia_high   # precio ya rompió Asia al alza
             below_asian = curr_close < asia_low    # precio ya rompió Asia a la baja
 
-            if breakout_up and ema_bull:
+            if breakout_up and ema_bull and not self.SELL_ONLY:
                 if self.USE_ASIAN_BIAS and not above_asian:
-                    continue  # precio en zona neutral o bajo asia → no comprar
+                    continue
                 signal_val    = "BUY"
                 sl            = min(curr_low, ny_high) - self.BUFFER_PIPS
                 risk_distance = entry - sl
@@ -263,7 +272,7 @@ class USDJPYBacktesterB:
 
             elif breakout_dn and ema_bear:
                 if self.USE_ASIAN_BIAS and not below_asian:
-                    continue  # precio en zona neutral o sobre asia → no vender
+                    continue
                 signal_val    = "SELL"
                 sl            = max(curr_high, ny_low) + self.BUFFER_PIPS
                 risk_distance = sl - entry

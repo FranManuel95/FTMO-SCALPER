@@ -26,7 +26,7 @@ def run(params: dict | None = None) -> None:
 
     result = bt.run()
 
-    print("\n=== RESULTADO USDJPY - ESTRATEGIA B v5 (NY-ORB + Breakeven Stop) ===")
+    print("\n=== RESULTADO USDJPY - ESTRATEGIA B v6 (SELL_ONLY + Horas 14-16) ===")
     print(f"Total trades:   {result.total_trades}")
     print(f"Win rate:       {result.win_rate:.2%}")
     print(f"Profit factor:  {result.profit_factor:.3f}  (mín FTMO: 1.3)")
