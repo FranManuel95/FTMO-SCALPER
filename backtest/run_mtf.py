@@ -74,17 +74,17 @@ def run_symbol(symbol: str) -> dict:
         print(f"\n  Resumen mensual:")
         print(monthly.to_string(index=False))
 
-        # Breakdown por patrón de entrada
-        if "pattern" in trades_df.columns:
-            print(f"\n  Breakdown por patrón:")
-            pat_grp = trades_df.groupby("pattern").agg(
+        # Breakdown por dirección
+        if "signal" in trades_df.columns:
+            print(f"\n  Breakdown por dirección:")
+            sig_grp = trades_df.groupby("signal").agg(
                 trades =("pnl", "count"),
                 wr     =("won", "mean"),
                 pnl    =("pnl", "sum"),
                 tp     =("exit_reason", lambda s: int((s == "tp").sum())),
                 sl     =("exit_reason", lambda s: int((s == "sl").sum())),
             ).round(3)
-            print(pat_grp.to_string())
+            print(sig_grp.to_string())
 
     ftmo_ok = (
         result.win_rate       >= 0.45 and
