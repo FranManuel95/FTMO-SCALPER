@@ -26,7 +26,7 @@ def run(params: dict | None = None) -> None:
 
     result = bt.run()
 
-    print("\n=== RESULTADO USDJPY - ESTRATEGIA B (NY Continuation) ===")
+    print("\n=== RESULTADO USDJPY - ESTRATEGIA B v5 (NY-ORB + Breakeven Stop) ===")
     print(f"Total trades:   {result.total_trades}")
     print(f"Win rate:       {result.win_rate:.2%}")
     print(f"Profit factor:  {result.profit_factor:.3f}  (mín FTMO: 1.3)")
@@ -40,9 +40,11 @@ def run(params: dict | None = None) -> None:
     print(f"FTMO OK:        {'✓ SÍ' if result.passes_ftmo_filter() else '✗ NO'}")
 
     if hasattr(result, "extra_stats") and result.extra_stats:
-        print("\n=== SALIDAS ===")
-        for k, v in result.extra_stats.items():
-            print(f"  {k}: {v}")
+        es = result.extra_stats
+        total = max(sum(es.values()), 1)
+        print("\n=== TIPO DE SALIDA ===")
+        for k, v in es.items():
+            print(f"  {k:8s}: {v:3d}  ({v/total:.1%})")
 
     if not bt.last_trades_detail:
         print("\n[!] Sin trades — revisa los filtros o el dataset")
@@ -67,6 +69,7 @@ def run(params: dict | None = None) -> None:
             avg_pnl  = ("pnl", "mean"),
             tp       = ("exit_reason", lambda s: int((s == "tp").sum())),
             sl       = ("exit_reason", lambda s: int((s == "sl").sum())),
+            be       = ("exit_reason", lambda s: int((s == "be").sum())),
             timeout  = ("exit_reason", lambda s: int((s == "timeout").sum())),
         )
         .reset_index()

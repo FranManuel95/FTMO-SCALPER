@@ -1,23 +1,23 @@
 # backtest/backtester_usdjpy_b.py — USDJPY Estrategia B: NY Open Range Breakout
 #
-# POR QUÉ CAMBIAMOS EL ENFOQUE:
-#   El pullback a EMA21 en NY generaba WR 27-40% → no funciona para USDJPY
-#   USDJPY en NY session sigue momentum, no revierte a EMAs en M5
+# HISTORIAL DE VERSIONES:
+#   v1: Pullback EMA21 en NY → WR 40.6%, 411 trades, DD 14.7% (demasiado DD)
+#   v2: + Confirmación vela → WR 27.3% (empeoró, descartado)
+#   v3: NY ORB (13-14 rango, 14-18 trading), RR 1.5 → 113 trades, WR 42.5%, PF 0.996
+#   v4: + Asian bias filter + RR 2.0 → 63 trades, WR 41.3%, PF 0.859 (peor)
+#       Diagnóstico: Asian bias no aporta edge. RR 2.0 genera 19% timeouts (pérdidas parciales)
+#       True WR excluyendo timeouts: 31.4% → eso explica PF 0.859
+#   v5: CORRECIONES BASADAS EN DIAGNÓSTICO v4:
+#       - USE_ASIAN_BIAS = False (sin edge estadístico, solo reduce trades)
+#       - RR_RATIO = 1.5 (de 2.0 → más alcanzable, menos timeouts)
+#       - ADX_MIN = 22 (de 18 → solo tendencias más fuertes, +WR esperada)
+#       - MAX_BARS_IN_TRADE = 24 (de 36 → 2h máx, cortar drag de timeouts)
+#       - USE_BREAKEVEN = True: cuando precio llega a 1.0R, mover SL a entrada
+#         → convierte reversal después de ganancia en salida neutral
 #
-# NUEVO ENFOQUE (misma lógica que Estrategia A, distinta ventana):
-#   Estrategia A → Asian range (00-07 UTC), opera London (07-16 UTC)
-#   Estrategia B → NY range    (13-14 UTC), opera NY     (14-18 UTC)
-#
-# LÓGICA:
-#   1. Construir el rango de la primera hora de NY (13:00-14:00 UTC)
-#   2. Detectar breakout del rango con buffer
-#   3. Mismos filtros que A: ADX, ATR, body ratio, EMA de tendencia
-#   4. Max 1 trade/día (complementario a Strategy A, no solapan)
-#
-# COMPLEMENTARIEDAD:
+# COMPLEMENTARIEDAD CON ESTRATEGIA A:
 #   A opera: 07-16 UTC | B opera: 14-18 UTC
-#   Solapan 14-16 UTC pero MAX_TRADES_DAY compartido controla el riesgo
-#   Días sin señal en A → B puede disparar; días con señal en A → B es bonus
+#   Solapan 14-16 UTC pero MAX_TRADES_DAY=1 compartido controla el riesgo
 
 import pandas as pd
 import numpy as np
@@ -29,7 +29,7 @@ class USDJPYBacktesterB:
     EMA_FAST      = 20
     EMA_SLOW      = 100
     ADX_PERIOD    = 14
-    ADX_MIN       = 18
+    ADX_MIN       = 22    # v5: subido de 18 → solo tendencias más fuertes (+WR)
     ADX_MAX       = 55
     ATR_PERIOD    = 14
     ATR_MIN       = 0.018
@@ -44,24 +44,29 @@ class USDJPYBacktesterB:
     SESSION_END    = 18   # 18:00 UTC (cierre antes de fin de NY activo)
 
     # ── Gestión del trade ──
-    RR_RATIO          = 2.0    # subido de 1.5 → math mejora a WR 42%: E = +0.26R
+    RR_RATIO          = 1.5    # v5: bajado de 2.0 → más alcanzable, menos timeouts
     BUFFER_PIPS       = 0.03   # buffer sobre/bajo el rango para confirmar breakout
     MIN_BODY_RATIO    = 0.45   # vela de breakout con cuerpo claro
-    MAX_BARS_IN_TRADE = 36     # máx 3h (36 × 5M)
+    MAX_BARS_IN_TRADE = 24     # v5: reducido de 36 → 2h máx, menos drag de timeouts
     MAX_TRADES_DAY    = 1      # 1 trade/día (complementa Strategy A)
     FRIDAY_CUTOFF     = 16     # viernes cerrar antes
+
+    # ── Breakeven stop ──
+    # Cuando el precio alcanza 1.0R de beneficio, mover SL a entrada
+    # Convierte potenciales pérdidas por reversal en ceros
+    USE_BREAKEVEN     = True
+    BREAKEVEN_TRIGGER = 1.0   # mover a breakeven cuando ganancia ≥ 1.0R
 
     # ── Filtros de calidad del rango ──
     RANGE_ATR_CAP     = 3.0    # rango NY no puede ser > 3×ATR (demasiado volátil)
     RANGE_MIN_PIPS    = 0.05   # rango mínimo para que valga la pena operar
 
-    # ── Filtro de sesgo asiático (confluencia con Estrategia A) ──
-    # Solo compramos si el precio ya rompió el Asia High (tendencia del día confirmada)
-    # Solo vendemos si el precio ya está bajo el Asia Low
-    # Esto crea confluencia natural entre A y B, eliminando trades en zona neutral
+    # ── Filtro de sesgo asiático (desactivado en v5) ──
+    # v4: activado → redujo trades 113→63 sin mejorar WR → no aporta edge real
+    # v5: desactivado → restaurar volumen de trades
     ASIA_START        = 0
     ASIA_END          = 7
-    USE_ASIAN_BIAS    = True   # activar/desactivar para comparar
+    USE_ASIAN_BIAS    = False   # v5: desactivado, sin edge estadístico
 
     def __init__(
         self,
@@ -179,7 +184,7 @@ class USDJPYBacktesterB:
         trades        = []
         trades_detail = []
         trades_by_day = {}
-        exit_stats    = {"tp": 0, "sl": 0, "timeout": 0}
+        exit_stats    = {"tp": 0, "sl": 0, "timeout": 0, "be": 0}
 
         for i in range(120, len(df) - 5):
             row = df.iloc[i]
@@ -276,25 +281,42 @@ class USDJPYBacktesterB:
             exit_price  = curr_close
             bars_held   = 0
 
+            be_activated   = False   # breakeven stop activado
+            be_sl          = sl      # SL deslizante (empieza en SL original)
+
             for j in range(i + 1, min(i + 1 + self.MAX_BARS_IN_TRADE, len(df))):
                 fh = float(df.iloc[j]["high"])
                 fl = float(df.iloc[j]["low"])
                 bars_held = j - i
 
                 if signal_val == "BUY":
+                    # Activar breakeven si el precio llegó al trigger
+                    if self.USE_BREAKEVEN and not be_activated:
+                        if fh >= entry + risk_distance * self.BREAKEVEN_TRIGGER:
+                            be_activated = True
+                            be_sl = entry + self.BUFFER_PIPS  # SL a breakeven + pequeño buffer
+                    # Comprobar SL (puede ser be_sl si ya se activó breakeven)
+                    active_sl = be_sl if be_activated else sl
+                    if fl <= active_sl:
+                        exit_reason = "be" if be_activated else "sl"
+                        won = be_activated  # breakeven = sin pérdida (break-even ≈ ganancia mínima)
+                        exit_time = df.index[j]; exit_price = active_sl; break
                     if fh >= tp:
                         won = True; exit_reason = "tp"
                         exit_time = df.index[j]; exit_price = tp; break
-                    if fl <= sl:
-                        exit_reason = "sl"
-                        exit_time = df.index[j]; exit_price = sl; break
-                else:
+                else:  # SELL
+                    if self.USE_BREAKEVEN and not be_activated:
+                        if fl <= entry - risk_distance * self.BREAKEVEN_TRIGGER:
+                            be_activated = True
+                            be_sl = entry - self.BUFFER_PIPS
+                    active_sl = be_sl if be_activated else sl
+                    if fh >= active_sl:
+                        exit_reason = "be" if be_activated else "sl"
+                        won = be_activated
+                        exit_time = df.index[j]; exit_price = active_sl; break
                     if fl <= tp:
                         won = True; exit_reason = "tp"
                         exit_time = df.index[j]; exit_price = tp; break
-                    if fh >= sl:
-                        exit_reason = "sl"
-                        exit_time = df.index[j]; exit_price = sl; break
 
             if exit_reason == "timeout":
                 timeout_idx = min(i + self.MAX_BARS_IN_TRADE, len(df) - 1)
@@ -302,9 +324,13 @@ class USDJPYBacktesterB:
                 exit_price  = float(df.iloc[timeout_idx]["close"])
                 pnl = (exit_price - entry if signal_val == "BUY"
                        else entry - exit_price) / risk_distance * risk_amt
-            elif won:
+            elif exit_reason == "tp":
                 pnl = risk_amt * self.rr_ratio
-            else:
+            elif exit_reason == "be":
+                # Salida por breakeven: ganancia mínima (~0 o ligero positivo)
+                pnl = abs(float(exit_price) - entry) / risk_distance * risk_amt
+                pnl = max(pnl, 0)  # nunca negativo en breakeven
+            else:  # sl
                 pnl = -risk_amt
 
             balance_before = balance
@@ -317,6 +343,7 @@ class USDJPYBacktesterB:
                 "entry_time":    df.index[i],
                 "exit_time":     exit_time,
                 "signal":        signal_val,
+                "bias":          "BULL" if signal_val == "BUY" else "BEAR",
                 "entry_price":   round(entry, 5),
                 "sl_price":      round(sl, 5),
                 "tp_price":      round(tp, 5),
