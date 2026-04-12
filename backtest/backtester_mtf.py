@@ -28,7 +28,7 @@
 import pandas as pd
 import numpy as np
 from backtest.backtester import BacktestResult
-from core.indicators import ema, rsi, atr, vwap_ema
+from core.indicators import ema, rsi, atr, vwap_ema, adx as adx_ind
 
 
 class MTFBacktester:
@@ -36,6 +36,7 @@ class MTFBacktester:
     # ── H1 ─────────────────────────────────────────────────────────────────
     H1_EMA_FAST    = 50
     H1_EMA_SLOW    = 200
+    H1_ADX_MIN     = 18      # ADX mínimo en H1: filtra mercados sin tendencia
 
     # ── M15 ────────────────────────────────────────────────────────────────
     M15_EMA_FAST   = 50
@@ -44,12 +45,11 @@ class MTFBacktester:
     # ── M5 momentum ────────────────────────────────────────────────────────
     M5_RSI_PERIOD  = 14
     M5_ATR_PERIOD  = 14
-    M5_EMA_FAST    = 50     # S/R dinámico en M5
-    M5_EMA_SLOW    = 200    # S/R dinámico en M5
     M5_ATR_MIN     = 0.0003
 
-    # ── Zona S/R: precio dentro de N×ATR de EMA para considerar toque ──────
-    SR_ZONE_ATR    = 0.4    # 0.4×ATR alrededor de EMA50/200 (ajustado de 0.6)
+    # ── Zona S/R: precio dentro de N×ATR de H1 EMA para considerar toque ──
+    # Los rebotes en H1 EMA50/200 tienen soporte institucional real.
+    SR_ZONE_ATR    = 0.8    # 0.8×M5_ATR alrededor de H1_EMA50/200
 
     # ── Patrones de vela ───────────────────────────────────────────────────
     ENGULF_MIN_RATIO = 1.05  # cuerpo engullidor ≥ 105% del cuerpo anterior
@@ -64,8 +64,8 @@ class MTFBacktester:
 
     # ── Gestión ────────────────────────────────────────────────────────────
     RR_RATIO           = 1.5
-    SL_BUFFER_ATR      = 0.10   # buffer extra debajo/encima del mínimo/máximo
-    MAX_SL_ATR         = 1.2    # SL máximo en ATR: evita entradas con SL >~8 pips
+    SL_BELOW_EMA_ATR   = 0.5    # SL = H1_EMA_level − 0.5×ATR (BUY) / + 0.5×ATR (SELL)
+    MAX_SL_ATR         = 1.5    # SL máximo permitido en ATR
     MAX_BARS_IN_TRADE  = 36     # 3h máximo
     MAX_TRADES_DAY     = 2
     FRIDAY_CLOSE_HOUR  = 21
@@ -115,20 +115,28 @@ class MTFBacktester:
 
     def _h1_trend(self, df_5m: pd.DataFrame) -> pd.DataFrame:
         """
-        H1: estructura de tendencia EMA50/200.
+        H1: estructura de tendencia EMA50/200 + ADX.
         BUY  → close > EMA50 > EMA200
         SELL → close < EMA50 < EMA200
+
+        Devuelve también los VALORES de H1_EMA50 y H1_EMA200 para usar como
+        zonas S/R en M5: un rebote en H1_EMA50 tiene respaldo institucional real.
         """
         df = self._resample(df_5m, "1h").copy()
         df["e50"]  = ema(df["close"], self.H1_EMA_FAST)
         df["e200"] = ema(df["close"], self.H1_EMA_SLOW)
 
+        adx_df     = adx_ind(df, 14)
+        df["h1_adx"] = adx_df["adx"]
+
         df["h1_bull"] = (df["close"] > df["e50"]) & (df["e50"] > df["e200"])
         df["h1_bear"] = (df["close"] < df["e50"]) & (df["e50"] < df["e200"])
 
-        df["h1_bull"] = df["h1_bull"].shift(1)
-        df["h1_bear"] = df["h1_bear"].shift(1)
-        return df[["h1_bull", "h1_bear"]]
+        for col in ["h1_bull", "h1_bear", "e50", "e200", "h1_adx"]:
+            df[col] = df[col].shift(1)
+
+        df = df.rename(columns={"e50": "h1_ema50", "e200": "h1_ema200"})
+        return df[["h1_bull", "h1_bear", "h1_ema50", "h1_ema200", "h1_adx"]]
 
     def _m15_trend(self, df_5m: pd.DataFrame) -> pd.DataFrame:
         """
@@ -163,8 +171,6 @@ class MTFBacktester:
         df = df.join(m15.reindex(df.index, method="ffill"), how="left")
 
         # Indicadores M5
-        df["ema50"]  = ema(df["close"], self.M5_EMA_FAST)
-        df["ema200"] = ema(df["close"], self.M5_EMA_SLOW)
         df["rsi5"]   = rsi(df["close"], self.M5_RSI_PERIOD)
         df["atr5"]   = atr(df, self.M5_ATR_PERIOD)
         df["vwap5"]  = vwap_ema(df["close"])
@@ -183,7 +189,7 @@ class MTFBacktester:
         for col in ["h1_bull", "h1_bear", "m15_bull", "m15_bear"]:
             df[col] = df[col].fillna(False)
 
-        return df.dropna(subset=["ema50", "ema200", "rsi5", "atr5", "vwap5"])
+        return df.dropna(subset=["h1_ema50", "h1_ema200", "rsi5", "atr5", "vwap5"])
 
     # ─────────────────────────────────────────────
     # PATRONES DE VELA
@@ -343,30 +349,36 @@ class MTFBacktester:
             m15_bull = bool(row["m15_bull"])
             m15_bear = bool(row["m15_bear"])
 
-            # ── Momentum M5 ─────────────────────────────────────────────────
-            rsi5     = float(row["rsi5"])
-            close    = float(row["close"])
-            vwap     = float(row["vwap5"])
-            ema50    = float(row["ema50"])
-            ema200   = float(row["ema200"])
+            # ── H1 ADX: solo operar cuando hay tendencia real ───────────────
+            h1_adx_val = float(row["h1_adx"]) if not pd.isna(row["h1_adx"]) else 0.0
+            if h1_adx_val < self.H1_ADX_MIN:
+                continue
 
-            rsi_bull = 35 <= rsi5 <= 65
-            rsi_bear = 35 <= rsi5 <= 65
+            # ── Niveles S/R: H1 EMA50 y H1 EMA200 proyectados a M5 ──────────
+            h1_ema50  = float(row["h1_ema50"])
+            h1_ema200 = float(row["h1_ema200"])
+            if pd.isna(h1_ema50) or pd.isna(h1_ema200):
+                continue
+
+            # ── Momentum M5 ─────────────────────────────────────────────────
+            rsi5      = float(row["rsi5"])
+            close     = float(row["close"])
+            vwap      = float(row["vwap5"])
+
+            rsi_bull  = 35 <= rsi5 <= 65
+            rsi_bear  = 35 <= rsi5 <= 65
             vwap_bull = close > vwap
             vwap_bear = close < vwap
-
-            # ── Alineación EMA en M5 (confirma mini-tendencia) ──────────────
-            m5_ema_bull = ema50 > ema200
-            m5_ema_bear = ema50 < ema200
 
             # ── Tamaño mínimo de la vela (filtra dojis y microvelas) ─────────
             curr_range = float(row["high"]) - float(row["low"])
             if curr_range < curr_atr * self.MIN_CANDLE_ATR:
                 continue
 
-            # ── Zona S/R en M5 ──────────────────────────────────────────────
-            near_sup = self._near_support(close, ema50, ema200, curr_atr)
-            near_res = self._near_resistance(close, ema50, ema200, curr_atr)
+            # ── Zona S/R: precio cerca de H1_EMA50 o H1_EMA200 ─────────────
+            # Rebotes en H1 EMA tienen respaldo institucional real.
+            near_sup = self._near_support(close, h1_ema50, h1_ema200, curr_atr)
+            near_res = self._near_resistance(close, h1_ema50, h1_ema200, curr_atr)
 
             # ── Patrones de vela (gatillo) ──────────────────────────────────
             bull_pattern = self._has_bull_trigger(prev, row)
@@ -376,12 +388,12 @@ class MTFBacktester:
             signal  = None
             pattern = None
 
-            if (h1_bull and m15_bull and m5_ema_bull and rsi_bull and vwap_bull and
+            if (h1_bull and m15_bull and rsi_bull and vwap_bull and
                     near_sup and bull_pattern):
                 signal  = "BUY"
                 pattern = bull_pattern
 
-            elif (h1_bear and m15_bear and m5_ema_bear and rsi_bear and vwap_bear and
+            elif (h1_bear and m15_bear and rsi_bear and vwap_bear and
                     near_res and bear_pattern):
                 signal  = "SELL"
                 pattern = bear_pattern
@@ -389,17 +401,27 @@ class MTFBacktester:
             if signal is None:
                 continue
 
-            # ── SL estructural (bajo/alto de la vela gatillo) ───────────────
+            # ── SL anclado al nivel H1 EMA más cercano ─────────────────────
+            # Si estamos en zona EMA50: SL = EMA50 − 0.5 ATR (BUY)
+            # Si estamos en zona EMA200: SL = EMA200 − 0.5 ATR (BUY)
+            # Asegura también que el SL está por debajo del mínimo de la vela.
+            entry = close
             if signal == "BUY":
-                sl = float(row["low"]) - curr_atr * self.SL_BUFFER_ATR
-                entry = close
+                # Usar el nivel H1 EMA más cercano como soporte
+                sr_level = h1_ema50 if abs(close - h1_ema50) <= abs(close - h1_ema200) \
+                           else h1_ema200
+                sl = sr_level - curr_atr * self.SL_BELOW_EMA_ATR
+                # También garantizar que el SL está por debajo del mínimo de la vela
+                sl = min(sl, float(row["low"]) - curr_atr * 0.05)
             else:
-                sl = float(row["high"]) + curr_atr * self.SL_BUFFER_ATR
-                entry = close
+                sr_level = h1_ema50 if abs(close - h1_ema50) <= abs(close - h1_ema200) \
+                           else h1_ema200
+                sl = sr_level + curr_atr * self.SL_BELOW_EMA_ATR
+                sl = max(sl, float(row["high"]) + curr_atr * 0.05)
 
             sl_dist = abs(entry - sl)
 
-            # Descartar si SL es absurdamente grande
+            # Descartar si SL es absurdamente grande o inválido
             if sl_dist > curr_atr * self.MAX_SL_ATR or sl_dist <= 0:
                 continue
 
@@ -482,6 +504,10 @@ class MTFBacktester:
                 "exit_reason":   exit_reason,
                 "won":           bool(won),
                 "rsi5":          round(rsi5, 1),
+                "h1_adx":        round(h1_adx_val, 1),
+                "h1_ema50":      round(h1_ema50, 5),
+                "h1_ema200":     round(h1_ema200, 5),
+                "sr_level":      round(sr_level, 5),
                 "atr5":          round(curr_atr, 5),
                 "pnl":           round(pnl, 2),
                 "balance_before":round(balance_before, 2),
