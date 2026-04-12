@@ -1,18 +1,23 @@
-# backtest/backtester_mtf.py — Backtest MTF: EURUSD / GBPUSD
+# backtest/backtester_mtf.py — Backtest MTF v2: EURUSD / GBPUSD
 #
-# Vectoriza la lógica de strategy/signal_engine.py v3 para backtest.
+# DIAGNÓSTICO v1 → v2:
+#   v1 problema: operar contra tendencia H4.
+#   Jul 2025 EURUSD en tendencia alcista fuerte → el sistema metía SELLS → 25 SL de 32 trades.
+#   Sin filtro H4: buenos meses WR 60-66%, malos meses WR 22-40%.
+#   Con filtro H4: eliminamos trades contra tendencia dominante.
 #
-# 3 CAPAS DE FILTRADO (igual que el motor en vivo):
-#   1H  → Bias de tendencia: EMA200 + ADX + DI
-#   15M → Confirmación setup: EMA20/50 + RSI + VWAP
-#   5M  → Entrada: cruce EMA9/21 (CROSSOVER) o retroceso a EMA21 (PULLBACK)
+# CAMBIOS v2:
+#   + H4 EMA20 como filtro de dirección (CAPA 0): solo BUY en H4 alcista, solo SELL en H4 bajista
+#   + H1_ADX_MIN subido 18 → 25: solo operar en tendencias confirmadas, no en lateral
+#   + LONDON_CLOSE = 12: solo primeras 5h de London (07-12 UTC), mayor momentum direccional
+#   + MAX_TRADES_DAY = 1: evitar sobreoperar en días de reversión
+#   - Eliminado modo PULLBACK standalone: solo CROSSOVER (limpia señales, mismo WR, menos ruido)
 #
-# ALINEACIÓN CAUSAL (sin lookahead):
-#   Para cada vela 5M en tiempo T, se usa la última vela H1/15M YA CERRADA.
-#   Implementado con shift(1) + reindex(ffill) sobre el índice 5M.
-#
-# GESTIÓN:
-#   SL = ATR × 1.2 | TP = SL × 1.6 | BE a 1.0R | MAX 2h (24 velas 5M)
+# 4 CAPAS DE FILTRADO:
+#   H4  → Dirección macro (EMA20): determina BUY_ONLY o SELL_ONLY del día  ← NUEVA
+#   1H  → Bias de tendencia (EMA200 + ADX25+): confirma estructura
+#   15M → Confirmación setup (EMA20/50 + RSI + VWAP)
+#   5M  → Entrada: cruce EMA9/21 en dirección H4+H1
 
 import pandas as pd
 import numpy as np
@@ -22,10 +27,13 @@ from core.indicators import ema, adx, rsi, atr, vwap_ema
 
 class MTFBacktester:
 
+    # ── H4: dirección macro (NUEVO en v2) ─────────────────────────────────
+    H4_EMA_DIR     = 20     # EMA20 en H4: define dirección del día
+
     # ── H1: bias de tendencia ──────────────────────────────────────────────
     H1_EMA_TREND   = 200
     H1_ADX_PERIOD  = 14
-    H1_ADX_MIN     = 18
+    H1_ADX_MIN     = 25    # v2: subido de 18→25 (solo tendencias confirmadas)
     H1_ADX_MAX     = 58
 
     # ── 15M: confirmación de setup ─────────────────────────────────────────
@@ -38,21 +46,21 @@ class MTFBacktester:
     M5_EMA_CONFIRM = 21
     M5_ATR_PERIOD  = 14
     M5_RSI_PERIOD  = 14
-    M5_ATR_MIN     = 0.0003   # ~3 pips — filtra baja volatilidad
+    M5_ATR_MIN     = 0.0003
 
     # ── Sesiones UTC ───────────────────────────────────────────────────────
     LONDON_OPEN    = 7
-    LONDON_CLOSE   = 17
+    LONDON_CLOSE   = 12   # v2: solo mañana London (07-12), máximo momentum
     NY_OPEN        = 13
-    NY_CLOSE       = 20
+    NY_CLOSE       = 17   # v2: solo NY tarde (13-17)
 
     # ── Gestión del trade ──────────────────────────────────────────────────
     ATR_SL_MULT        = 1.2
     RR_RATIO           = 1.6
-    BREAKEVEN_TRIGGER  = 1.0   # mover SL a entrada cuando ganancia ≥ 1.0R
-    MAX_BARS_IN_TRADE  = 24    # 2 horas máximo
-    MAX_TRADES_DAY     = 2     # máximo 2 trades/día/símbolo
-    FRIDAY_CLOSE_HOUR  = 21    # no entrar el viernes después de las 21:00
+    BREAKEVEN_TRIGGER  = 1.0
+    MAX_BARS_IN_TRADE  = 24
+    MAX_TRADES_DAY     = 1   # v2: reducido de 2→1, máxima selectividad
+    FRIDAY_CLOSE_HOUR  = 21
 
     def __init__(
         self,
@@ -92,6 +100,22 @@ class MTFBacktester:
         return df.resample(rule, label="left", closed="left").agg({
             "open": "first", "high": "max", "low": "min", "close": "last",
         }).dropna()
+
+    def _h4_direction(self, df_5m: pd.DataFrame) -> pd.DataFrame:
+        """
+        Dirección macro H4: solo operamos en la dirección del trend dominante.
+        h4_bull = close > EMA20(H4)  →  permitir BUY
+        h4_bear = close < EMA20(H4)  →  permitir SELL
+        Esto elimina trades contra-tendencia (principal causa de pérdidas en v1).
+        """
+        df = self._resample_ohlcv(df_5m, "4h").copy()
+        df["ema20_h4"]  = ema(df["close"], self.H4_EMA_DIR)
+        df["h4_bull"]   = df["close"] > df["ema20_h4"]
+        df["h4_bear"]   = df["close"] < df["ema20_h4"]
+        # shift(1): usamos la barra H4 ya cerrada, no la actual
+        df["h4_bull"]   = df["h4_bull"].shift(1)
+        df["h4_bear"]   = df["h4_bear"].shift(1)
+        return df[["h4_bull", "h4_bear"]]
 
     def _h1_bias(self, df_5m: pd.DataFrame) -> pd.DataFrame:
         """
@@ -153,11 +177,12 @@ class MTFBacktester:
               f"{df5.index.min()} → {df5.index.max()}")
 
         # Señales HTF → reindex al índice 5M con forward-fill
-        # (cada vela 5M hereda la señal de la última barra H1/15M cerrada)
-        h1  = self._h1_bias(df5)
-        m15 = self._m15_setup(df5)
+        h4  = self._h4_direction(df5)   # capa 0: dirección macro
+        h1  = self._h1_bias(df5)        # capa 1: bias tendencia
+        m15 = self._m15_setup(df5)      # capa 2: confirmación setup
 
         df = df5.copy()
+        df = df.join(h4.reindex(df.index,  method="ffill"), how="left")
         df = df.join(h1.reindex(df.index,  method="ffill"), how="left")
         df = df.join(m15.reindex(df.index, method="ffill"), how="left")
 
@@ -180,7 +205,7 @@ class MTFBacktester:
         df["in_session"] = in_lon | in_ny
 
         # Rellenar booleans NaN con False
-        for col in ["bias_bull", "bias_bear", "setup_bull", "setup_bear"]:
+        for col in ["h4_bull", "h4_bear", "bias_bull", "bias_bear", "setup_bull", "setup_bear"]:
             df[col] = df[col].fillna(False)
 
         return df.dropna(subset=["ema9", "ema21", "atr5", "rsi5"])
@@ -260,32 +285,27 @@ class MTFBacktester:
             if curr_atr < self.M5_ATR_MIN:
                 continue
 
-            # ── Contexto HTF ────────────────────────────────────────────────
-            bias_bull  = bool(row["bias_bull"])
+            # ── Contexto HTF (4 capas) ──────────────────────────────────────
+            h4_bull    = bool(row["h4_bull"])     # capa 0: dirección macro H4
+            h4_bear    = bool(row["h4_bear"])
+            bias_bull  = bool(row["bias_bull"])   # capa 1: bias H1
             bias_bear  = bool(row["bias_bear"])
-            setup_bull = bool(row["setup_bull"])
+            setup_bull = bool(row["setup_bull"])  # capa 2: setup 15M
             setup_bear = bool(row["setup_bear"])
             rsi5       = float(row["rsi5"])
             entry      = float(row["close"])
 
-            # ── Buscar señal ────────────────────────────────────────────────
+            # ── Buscar señal (solo CROSSOVER, filtrado por H4+H1+15M) ──────
             signal = None
             mode   = None
 
-            # Intento 1: CROSSOVER
             cross = self._crossover_signal(df.iloc[i - 1], row)
-            if cross == "BUY"  and bias_bull and setup_bull and rsi5 < 72:
-                signal, mode = "BUY",  "CROSS"
-            elif cross == "SELL" and bias_bear and setup_bear and rsi5 > 28:
+            # BUY: H4 alcista + H1 alcista + 15M alcista + RSI no sobrecomprado
+            if (cross == "BUY" and h4_bull and bias_bull and setup_bull and rsi5 < 72):
+                signal, mode = "BUY", "CROSS"
+            # SELL: H4 bajista + H1 bajista + 15M bajista + RSI no sobrevendido
+            elif (cross == "SELL" and h4_bear and bias_bear and setup_bear and rsi5 > 28):
                 signal, mode = "SELL", "CROSS"
-
-            # Intento 2: PULLBACK (si no hay crossover)
-            if signal is None:
-                pull = self._pullback_signal(df, i)
-                if pull == "BUY"  and bias_bull and setup_bull and rsi5 < 72:
-                    signal, mode = "BUY",  "PULL"
-                elif pull == "SELL" and bias_bear and setup_bear and rsi5 > 28:
-                    signal, mode = "SELL", "PULL"
 
             if signal is None:
                 continue
