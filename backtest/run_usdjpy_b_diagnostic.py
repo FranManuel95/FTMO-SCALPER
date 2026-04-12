@@ -13,14 +13,14 @@ print(f"Win rate global: {trades['won'].mean():.2%}\n")
 
 # ─── 1. WIN RATE POR DIRECCIÓN ───────────────────────────────────────────────
 print("=== WIN RATE POR DIRECCIÓN ===")
-print(trades.groupby("signal")[["won"]].agg(
+print(trades.groupby("signal").agg(
     trades=("won","count"), wins=("won","sum"),
     wr=("won","mean"), avg_pnl=("pnl","mean")
 ).round(3).to_string())
 
 # ─── 2. WIN RATE POR BIAS DEL DÍA ────────────────────────────────────────────
 print("\n=== WIN RATE POR BIAS DEL DÍA ===")
-print(trades.groupby("bias")[["won"]].agg(
+print(trades.groupby("bias").agg(
     trades=("won","count"), wins=("won","sum"),
     wr=("won","mean"), avg_pnl=("pnl","mean")
 ).round(3).to_string())
@@ -30,14 +30,14 @@ print("\n=== WIN RATE POR NIVEL DE ADX ===")
 trades["adx_bucket"] = pd.cut(trades["adx"],
     bins=[0, 15, 20, 25, 30, 40, 60],
     labels=["<15","15-20","20-25","25-30","30-40",">40"])
-print(trades.groupby("adx_bucket", observed=True).agg(
+print(trades.groupby("adx_bucket", observed=True)[["won","pnl"]].agg(
     trades=("won","count"), wr=("won","mean"), avg_pnl=("pnl","mean")
 ).round(3).to_string())
 
 # ─── 4. WIN RATE POR HORA DE ENTRADA ─────────────────────────────────────────
 print("\n=== WIN RATE POR HORA UTC ===")
 trades["hour"] = trades["entry_time"].dt.hour
-print(trades.groupby("hour").agg(
+print(trades.groupby("hour")[["won","pnl"]].agg(
     trades=("won","count"), wr=("won","mean"), avg_pnl=("pnl","mean")
 ).round(3).to_string())
 
@@ -46,7 +46,7 @@ print("\n=== WIN RATE POR DURACIÓN ===")
 trades["bars_bucket"] = pd.cut(trades["bars_held"],
     bins=[0,5,10,15,20,30,50],
     labels=["1-5","6-10","11-15","16-20","21-30","31+"])
-print(trades.groupby("bars_bucket", observed=True).agg(
+print(trades.groupby("bars_bucket", observed=True)[["won","pnl"]].agg(
     trades=("won","count"), wr=("won","mean"), avg_pnl=("pnl","mean")
 ).round(3).to_string())
 
