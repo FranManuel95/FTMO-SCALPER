@@ -25,7 +25,10 @@ def sma(series: pd.Series, period: int) -> pd.Series:
 # ─────────────────────────────────────────────
 
 def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    """Average True Range. Requiere columnas: high, low, close."""
+    """
+    Average True Range (ATR).
+    Requiere columnas: high, low, close.
+    """
     hl  = df['high'] - df['low']
     hcp = (df['high'] - df['close'].shift()).abs()
     lcp = (df['low']  - df['close'].shift()).abs()
@@ -34,7 +37,7 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
 
 
 def true_range(df: pd.DataFrame) -> pd.Series:
-    """True Range sin suavizar."""
+    """True Range sin suavizar — útil para filtros de volatilidad intracandle."""
     hl  = df['high'] - df['low']
     hcp = (df['high'] - df['close'].shift()).abs()
     lcp = (df['low']  - df['close'].shift()).abs()
@@ -46,7 +49,10 @@ def true_range(df: pd.DataFrame) -> pd.Series:
 # ─────────────────────────────────────────────
 
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
-    """RSI con Wilder's smoothing — consistente con TradingView y MT5."""
+    """
+    Relative Strength Index (RSI).
+    Implementación con RMA (Wilder's smoothing) para consistencia con TradingView.
+    """
     delta = series.diff()
     gain  = delta.where(delta > 0, 0.0).ewm(alpha=1/period, adjust=False).mean()
     loss  = (-delta.where(delta < 0, 0.0)).ewm(alpha=1/period, adjust=False).mean()
@@ -60,61 +66,93 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
 
 def adx(df: pd.DataFrame, period: int = 14) -> pd.DataFrame:
     """
-    ADX con +DI y -DI. Requiere columnas: high, low, close.
+    Average Directional Index (ADX) con +DI y -DI.
+    Requiere columnas: high, low, close.
     Devuelve DataFrame con columnas: adx, plus_di, minus_di.
     """
-    up_move   = df['high'].diff()
-    down_move = -df['low'].diff()
+    high  = df['high']
+    low   = df['low']
+    close = df['close']
+
+    up_move   = high.diff()
+    down_move = -low.diff()
 
     plus_dm  = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
     minus_dm = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
 
-    tr_smooth  = true_range(df).ewm(alpha=1/period, adjust=False).mean()
-    plus_di    = 100 * plus_dm.ewm(alpha=1/period, adjust=False).mean() / (tr_smooth + 1e-10)
-    minus_di   = 100 * minus_dm.ewm(alpha=1/period, adjust=False).mean() / (tr_smooth + 1e-10)
-    dx         = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)
-    adx_val    = dx.ewm(alpha=1/period, adjust=False).mean()
+    tr_series = true_range(df)
+
+    # Wilder's smoothing
+    tr_smooth   = tr_series.ewm(alpha=1/period, adjust=False).mean()
+    plus_dm_s   = plus_dm.ewm(alpha=1/period, adjust=False).mean()
+    minus_dm_s  = minus_dm.ewm(alpha=1/period, adjust=False).mean()
+
+    plus_di_val  = 100 * plus_dm_s  / (tr_smooth + 1e-10)
+    minus_di_val = 100 * minus_dm_s / (tr_smooth + 1e-10)
+    dx           = 100 * (plus_di_val - minus_di_val).abs() / \
+                   (plus_di_val + minus_di_val + 1e-10)
+    adx_val      = dx.ewm(alpha=1/period, adjust=False).mean()
 
     return pd.DataFrame({
         'adx':      adx_val,
-        'plus_di':  plus_di,
-        'minus_di': minus_di,
+        'plus_di':  plus_di_val,
+        'minus_di': minus_di_val,
     }, index=df.index)
 
 
 # ─────────────────────────────────────────────
-# VWAP
+# PRECIO / SESIÓN
 # ─────────────────────────────────────────────
 
 def vwap_ema(series: pd.Series, span: int = 20) -> pd.Series:
-    """VWAP aproximado con EMA — proxy válido en M5/M15 sin volumen real."""
+    """
+    VWAP aproximado con EMA del precio de cierre.
+    En M5/M15 sin datos de volumen real, esto es un proxy suficiente.
+    Para mayor precisión en backtests con volumen real, usar vwap_real().
+    """
     return series.ewm(span=span, adjust=False).mean()
 
 
 def vwap_real(df: pd.DataFrame) -> pd.Series:
-    """VWAP real si hay columna tick_volume o volume. Si no, usa vwap_ema."""
+    """
+    VWAP real si el DataFrame tiene columna 'tick_volume' o 'volume'.
+    Si no hay volumen, cae back a vwap_ema.
+    """
     vol_col = 'tick_volume' if 'tick_volume' in df.columns else \
               'volume'       if 'volume'      in df.columns else None
     if vol_col is None:
         return vwap_ema(df['close'])
-    typical    = (df['high'] + df['low'] + df['close']) / 3
-    vol        = df[vol_col]
-    return (typical * vol).cumsum() / (vol.cumsum() + 1e-10)
+
+    typical = (df['high'] + df['low'] + df['close']) / 3
+    vol     = df[vol_col]
+    cum_tp_vol = (typical * vol).cumsum()
+    cum_vol    = vol.cumsum()
+    return cum_tp_vol / (cum_vol + 1e-10)
 
 
 # ─────────────────────────────────────────────
-# CANDLE HELPERS
+# CANDLE ANALYSIS
 # ─────────────────────────────────────────────
 
 def body_ratio(df: pd.DataFrame) -> pd.Series:
-    """Ratio cuerpo/rango total de la vela (0-1)."""
+    """Ratio entre cuerpo real y rango total de la vela (0-1)."""
     body  = (df['close'] - df['open']).abs()
     total = (df['high'] - df['low']).replace(0, np.nan)
     return body / total
 
 
+def is_bullish_candle(df: pd.DataFrame) -> pd.Series:
+    """True si la vela cierra por encima de su apertura."""
+    return df['close'] > df['open']
+
+
+def is_bearish_candle(df: pd.DataFrame) -> pd.Series:
+    """True si la vela cierra por debajo de su apertura."""
+    return df['close'] < df['open']
+
+
 # ─────────────────────────────────────────────
-# HELPER PARA BACKTESTS
+# AYUDANTES PARA BACKTEST
 # ─────────────────────────────────────────────
 
 def add_indicators_mtf(df: pd.DataFrame,
@@ -124,7 +162,10 @@ def add_indicators_mtf(df: pd.DataFrame,
                        adx_period: int = 14,
                        rsi_period: int = 14,
                        atr_period: int = 14) -> pd.DataFrame:
-    """Añade todos los indicadores MTF de una vez. Útil en backtests."""
+    """
+    Añade todos los indicadores necesarios para la estrategia MTF de una vez.
+    Devuelve el DataFrame con las columnas nuevas añadidas.
+    """
     df = df.copy()
     df['ema_fast']  = ema(df['close'], ema_fast)
     df['ema_slow']  = ema(df['close'], ema_slow)

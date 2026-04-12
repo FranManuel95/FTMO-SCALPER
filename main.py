@@ -190,7 +190,7 @@ def main():
         f"Límites: DD 9.5% | Diario 4.5% | Riesgo 0.5%/trade"
     )
 
-    acct = bridge.get_account_info()
+    acct = bridge.get_account_info()  # necesario para el bloque KeyboardInterrupt
 
     try:
         while True:
@@ -223,12 +223,12 @@ def main():
                 for symbol in active_symbols:
                     try:
                         process_mtf_symbol(
-                            symbol      = symbol,
-                            bridge      = bridge,
-                            guardian    = guardian,
-                            engine      = engines[symbol],
-                            htf_counter = htf_counter,
-                            last_candle = last_candle,
+                            symbol     = symbol,
+                            bridge     = bridge,
+                            guardian   = guardian,
+                            engine     = engines[symbol],
+                            htf_counter= htf_counter,
+                            last_candle= last_candle,
                         )
                     except Exception as e:
                         log.error(f"{symbol}: Error procesando par: {e}")

@@ -1,0 +1,20 @@
+# requirements.txt — FTMO Scalper v3
+# Instalar con: pip install -r requirements.txt
+
+# ── Núcleo ──
+pandas>=2.0.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# ── MetaTrader5 (solo Windows/MT5 instalado) ──
+MetaTrader5>=5.0.45
+
+# ── Noticias económicas ──
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# ── Notificaciones ──
+# (requests ya incluido arriba para Telegram HTTP API)
+
+# ── Backtesting & análisis ──
+scipy>=1.11.0        # Para métricas estadísticas en walk-forward
