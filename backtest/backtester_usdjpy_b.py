@@ -29,7 +29,7 @@ class USDJPYBacktesterB:
     EMA_FAST      = 20
     EMA_SLOW      = 100
     ADX_PERIOD    = 14
-    ADX_MIN       = 15
+    ADX_MIN       = 18
     ADX_MAX       = 55
     ATR_PERIOD    = 14
     ATR_MIN       = 0.018
@@ -44,7 +44,7 @@ class USDJPYBacktesterB:
     SESSION_END    = 18   # 18:00 UTC (cierre antes de fin de NY activo)
 
     # ── Gestión del trade ──
-    RR_RATIO          = 1.5
+    RR_RATIO          = 2.0    # subido de 1.5 → math mejora a WR 42%: E = +0.26R
     BUFFER_PIPS       = 0.03   # buffer sobre/bajo el rango para confirmar breakout
     MIN_BODY_RATIO    = 0.45   # vela de breakout con cuerpo claro
     MAX_BARS_IN_TRADE = 36     # máx 3h (36 × 5M)
@@ -54,6 +54,14 @@ class USDJPYBacktesterB:
     # ── Filtros de calidad del rango ──
     RANGE_ATR_CAP     = 3.0    # rango NY no puede ser > 3×ATR (demasiado volátil)
     RANGE_MIN_PIPS    = 0.05   # rango mínimo para que valga la pena operar
+
+    # ── Filtro de sesgo asiático (confluencia con Estrategia A) ──
+    # Solo compramos si el precio ya rompió el Asia High (tendencia del día confirmada)
+    # Solo vendemos si el precio ya está bajo el Asia Low
+    # Esto crea confluencia natural entre A y B, eliminando trades en zona neutral
+    ASIA_START        = 0
+    ASIA_END          = 7
+    USE_ASIAN_BIAS    = True   # activar/desactivar para comparar
 
     def __init__(
         self,
@@ -123,13 +131,22 @@ class USDJPYBacktesterB:
         df["ny_high"] = np.nan
         df["ny_low"]  = np.nan
 
+        # Rango asiático: high/low de 00:00-07:00 UTC (sesgo del día)
+        df["asia_high"] = np.nan
+        df["asia_low"]  = np.nan
+
         for date, grp in df.groupby("date"):
             ny = grp[(grp["hour"] >= self.NY_RANGE_START) &
                      (grp["hour"] <  self.NY_RANGE_END)]
-            if len(ny) == 0:
-                continue
-            df.loc[df["date"] == date, "ny_high"] = float(ny["high"].max())
-            df.loc[df["date"] == date, "ny_low"]  = float(ny["low"].min())
+            if len(ny) > 0:
+                df.loc[df["date"] == date, "ny_high"] = float(ny["high"].max())
+                df.loc[df["date"] == date, "ny_low"]  = float(ny["low"].min())
+
+            asia = grp[(grp["hour"] >= self.ASIA_START) &
+                       (grp["hour"] <  self.ASIA_END)]
+            if len(asia) > 0:
+                df.loc[df["date"] == date, "asia_high"] = float(asia["high"].max())
+                df.loc[df["date"] == date, "asia_low"]  = float(asia["low"].min())
 
         df["ny_range"] = df["ny_high"] - df["ny_low"]
         return df
@@ -139,7 +156,8 @@ class USDJPYBacktesterB:
         df = self._add_indicators(df)
         df = self._add_daily_levels(df)
         cols = ["open","high","low","close","atr","adx","ema_fast","ema_slow",
-                "ny_high","ny_low","ny_range","hour","date","weekday"]
+                "ny_high","ny_low","ny_range","asia_high","asia_low",
+                "hour","date","weekday"]
         return df.dropna(subset=cols)
 
     @staticmethod
@@ -224,13 +242,23 @@ class USDJPYBacktesterB:
             tp            = None
             risk_distance = None
 
+            # ── Filtro de sesgo asiático (confluencia con Estrategia A) ──
+            asia_high   = float(row["asia_high"])
+            asia_low    = float(row["asia_low"])
+            above_asian = curr_close > asia_high   # precio ya rompió Asia al alza
+            below_asian = curr_close < asia_low    # precio ya rompió Asia a la baja
+
             if breakout_up and ema_bull:
+                if self.USE_ASIAN_BIAS and not above_asian:
+                    continue  # precio en zona neutral o bajo asia → no comprar
                 signal_val    = "BUY"
                 sl            = min(curr_low, ny_high) - self.BUFFER_PIPS
                 risk_distance = entry - sl
                 tp            = entry + risk_distance * self.rr_ratio
 
             elif breakout_dn and ema_bear:
+                if self.USE_ASIAN_BIAS and not below_asian:
+                    continue  # precio en zona neutral o sobre asia → no vender
                 signal_val    = "SELL"
                 sl            = max(curr_high, ny_low) + self.BUFFER_PIPS
                 risk_distance = sl - entry
