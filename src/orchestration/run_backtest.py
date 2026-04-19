@@ -49,6 +49,7 @@ def run_backtest(
     tz_offset: int = 2,
     htf_trend: bool = True,
     diagnostic: bool = False,
+    research: bool = False,
 ) -> dict:
     setup_logging()
 
@@ -89,14 +90,17 @@ def run_backtest(
     daily_guard = DailyLossGuard(initial_balance)
     max_guard = MaxLossGuard(initial_balance)
 
+    if research:
+        print("[mode] RESEARCH — MaxLossGuard desactivado para ver performance completa")
+
     trades: list[Trade] = []
     trade_log: list[dict] = []
 
     for sig in signals:
-        if max_guard.is_triggered():
+        if not research and max_guard.is_triggered():
             print("[risk] MaxLossGuard activado — deteniendo simulación")
             break
-        if daily_guard.is_blocked(sig.timestamp):
+        if not research and daily_guard.is_blocked(sig.timestamp):
             continue
 
         size = size_by_fixed_risk(initial_balance, risk_pct, sig.entry_price, sig.stop_loss)
@@ -212,11 +216,12 @@ if __name__ == "__main__":
     parser.add_argument("--tz-offset", type=int, default=2)
     parser.add_argument("--no-htf", action="store_true", help="Desactivar filtro de tendencia H4")
     parser.add_argument("--diagnostic", action="store_true", help="Guardar CSV con motivo de cada señal rechazada")
+    parser.add_argument("--research", action="store_true", help="Desactivar guards para ver performance completa del año")
     args = parser.parse_args()
 
     results = run_backtest(
         args.symbol, args.strategy, args.start, args.end,
         args.timeframe, args.balance, args.risk, args.data_dir,
-        args.tz_offset, not args.no_htf, args.diagnostic,
+        args.tz_offset, not args.no_htf, args.diagnostic, args.research,
     )
     print(json.dumps(results, indent=2, default=str))
