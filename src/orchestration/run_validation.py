@@ -24,6 +24,8 @@ from src.core.logging import setup_logging
 from src.orchestration.run_backtest import run_backtest
 from src.validation.walk_forward import walk_forward_efficiency
 
+_COMBINED_STRATEGY = "combined"
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -146,24 +148,39 @@ def run_validation(
 ) -> dict:
     setup_logging()
 
+    is_combined = strategy == _COMBINED_STRATEGY
+    tf_label = "15m+1h" if is_combined else timeframe
+
     total_months = _months_between(start, end)
     print(f"\n{'='*60}")
-    print(f"WALK-FORWARD VALIDATION — {symbol} {strategy} {timeframe}")
+    print(f"WALK-FORWARD VALIDATION — {symbol} {strategy} {tf_label}")
     print(f"Periodo: {start} → {end} ({total_months} meses)")
     print(f"IS={is_months}m  OOS={oos_months}m  Step={step_months}m")
-    print(f"Risk={risk*100:.1f}%  ADX>{adx_min or 20}  RR={rr_target or 2.0}")
+    print(f"Risk={risk*100:.1f}%  ADX>{adx_min or 25}  RR={rr_target or 2.5}")
     print(f"{'='*60}\n")
 
     windows = _build_windows(start, end, is_months, oos_months, step_months)
     if not windows:
         raise ValueError(f"Rango insuficiente para {is_months}m IS + {oos_months}m OOS")
 
-    # Kwargs comunes para run_backtest
-    bt_kwargs = dict(
-        symbol=symbol, strategy=strategy, timeframe=timeframe,
-        initial_balance=initial_balance, risk_pct=risk,
-        research=True, adx_min=adx_min, rr_target=rr_target,
-    )
+    # Seleccionar función de backtest según estrategia
+    if is_combined:
+        from src.orchestration.run_combined import run_combined_backtest
+        def _run(start, end):
+            return run_combined_backtest(
+                symbol=symbol, start=start, end=end,
+                initial_balance=initial_balance, risk_pct=risk,
+                adx_min=adx_min or 25.0, rr_target=rr_target or 2.5,
+                research=True,
+            )
+    else:
+        bt_kwargs = dict(
+            symbol=symbol, strategy=strategy, timeframe=timeframe,
+            initial_balance=initial_balance, risk_pct=risk,
+            research=True, adx_min=adx_min, rr_target=rr_target,
+        )
+        def _run(start, end):
+            return run_backtest(start=start, end=end, **bt_kwargs)
 
     rows = []
     all_oos_pnls: list[float] = []
@@ -171,8 +188,8 @@ def run_validation(
     for i, w in enumerate(windows, 1):
         print(f"[W{i}] IS {w['is_start']}→{w['is_end']}  |  OOS {w['oos_start']}→{w['oos_end']}")
 
-        is_res  = run_backtest(start=w["is_start"],  end=w["is_end"],  **bt_kwargs)
-        oos_res = run_backtest(start=w["oos_start"], end=w["oos_end"], **bt_kwargs)
+        is_res  = _run(w["is_start"],  w["is_end"])
+        oos_res = _run(w["oos_start"], w["oos_end"])
 
         is_pf  = _pf(is_res)
         oos_pf = _pf(oos_res)
@@ -203,8 +220,12 @@ def run_validation(
         rows.append(row)
 
         status = "✓" if oos_pf >= 1.0 else "✗"
-        print(f"     IS  → PF {is_pf:.3f} | WR {_wr(is_res):.1%} | PnL ${_net(is_res):+.0f} | DD {_dd(is_res):.1%}")
-        print(f"     OOS → PF {oos_pf:.3f} | WR {_wr(oos_res):.1%} | PnL ${_net(oos_res):+.0f} | DD {_dd(oos_res):.1%}  {status}")
+        if is_combined:
+            print(f"     IS  → PF {is_pf:.3f} | WR {_wr(is_res):.1%} | PnL ${_net(is_res):+.0f} | DD {_dd(is_res):.1%} | trades {_trades(is_res)} (bo={is_res.get('bo_signals',0)} pb={is_res.get('pb_signals',0)})")
+            print(f"     OOS → PF {oos_pf:.3f} | WR {_wr(oos_res):.1%} | PnL ${_net(oos_res):+.0f} | DD {_dd(oos_res):.1%} | trades {_trades(oos_res)} (bo={oos_res.get('bo_signals',0)} pb={oos_res.get('pb_signals',0)})  {status}")
+        else:
+            print(f"     IS  → PF {is_pf:.3f} | WR {_wr(is_res):.1%} | PnL ${_net(is_res):+.0f} | DD {_dd(is_res):.1%}")
+            print(f"     OOS → PF {oos_pf:.3f} | WR {_wr(oos_res):.1%} | PnL ${_net(oos_res):+.0f} | DD {_dd(oos_res):.1%}  {status}")
         print(f"     WFE = {wfe_str}  ({'PASS ≥0.5' if wfe_ok else ('FAIL <0.5' if wfe is not None else 'N/A')})\n")
 
     df = pd.DataFrame(rows)
@@ -280,7 +301,8 @@ def run_validation(
         "monte_carlo": mc,
     }
 
-    out_path = Path("reports/strategy_reports") / f"{symbol}_{strategy}_{timeframe}_validation.json"
+    tf_tag = "15m+1h" if is_combined else timeframe
+    out_path = Path("reports/strategy_reports") / f"{symbol}_{strategy}_{tf_tag}_validation.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w") as f:
         json.dump(out, f, indent=2, default=str)
@@ -294,7 +316,7 @@ def run_validation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Walk-forward + Monte Carlo validation")
     parser.add_argument("--symbol",    default="XAUUSD")
-    parser.add_argument("--strategy",  default="pullback", choices=["breakout", "pullback"])
+    parser.add_argument("--strategy",  default="pullback", choices=["breakout", "pullback", "combined"])
     parser.add_argument("--timeframe", default="1h")
     parser.add_argument("--start",     default="2022-01-01")
     parser.add_argument("--end",       default="2025-01-01")
