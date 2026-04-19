@@ -69,13 +69,17 @@ def _parse_mt5_csv(path: Path) -> pd.DataFrame:
     }
     df.rename(columns=rename_map, inplace=True)
 
-    # Construir índice datetime
+    # Construir índice datetime — soporta varias convenciones de MT5
     if "date" in df.columns and "time" in df.columns:
         df["datetime"] = pd.to_datetime(df["date"] + " " + df["time"], utc=True)
     elif "date" in df.columns:
         df["datetime"] = pd.to_datetime(df["date"], utc=True)
+    elif "time" in df.columns:
+        # Formato simple: columna 'time' contiene datetime completo (ej. "2022-01-14 15:30:00")
+        df["datetime"] = pd.to_datetime(df["time"], utc=True)
     else:
-        raise ValueError(f"No se encontró columna de fecha en {path.name}")
+        cols = list(df.columns)
+        raise ValueError(f"No se encontró columna de fecha en {path.name}. Columnas: {cols}")
 
     df.set_index("datetime", inplace=True)
     df.index = pd.to_datetime(df.index, utc=True)
