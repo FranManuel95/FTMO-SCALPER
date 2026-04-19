@@ -1,0 +1,42 @@
+forex:
+  - symbol: EURUSD
+    description: Euro / US Dollar
+    typical_spread_pips: 0.7
+    pip_value: 0.0001
+    priority: 2
+
+  - symbol: GBPUSD
+    description: British Pound / US Dollar
+    typical_spread_pips: 1.0
+    pip_value: 0.0001
+    priority: 4
+
+  - symbol: USDJPY
+    description: US Dollar / Japanese Yen
+    typical_spread_pips: 0.8
+    pip_value: 0.01
+    priority: 3
+
+  - symbol: EURJPY
+    description: Euro / Japanese Yen
+    typical_spread_pips: 1.2
+    pip_value: 0.01
+    priority: 5
+
+metals:
+  - symbol: XAUUSD
+    description: Gold / US Dollar
+    typical_spread_usd: 0.25
+    contract_size: 100
+    priority: 1
+
+crypto:
+  - symbol: BTCUSDT
+    description: Bitcoin / USDT
+    typical_spread_pct: 0.05
+    priority: 6
+
+  - symbol: ETHUSDT
+    description: Ethereum / USDT
+    typical_spread_pct: 0.05
+    priority: 7

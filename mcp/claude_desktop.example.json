@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "freqtrade": {
+      "command": "uvx",
+      "args": ["freqtrade-mcp"],
+      "env": {
+        "FREQTRADE_API_URL": "http://localhost:8080",
+        "FREQTRADE_USERNAME": "your_username",
+        "FREQTRADE_PASSWORD": "your_password"
+      }
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/trading-research-lab"],
+      "env": {}
+    }
+  }
+}

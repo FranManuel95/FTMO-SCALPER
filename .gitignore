@@ -1,19 +1,53 @@
-# Entorno virtual
-ftmo_env/
-
-# Credenciales
+# Entorno
 .env
-
-# Python compilado
+.venv/
+venv/
+ftmo_env/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Datos de mercado (no versionar)
+data/raw/
+data/processed/
+data/external/
+backtest/data/
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/external/.gitkeep
 
 # Logs
-logs/bot.log
+logs/
+*.log
 
-# Datos CSV (son muy pesados)
-backtest/data/
+# Reportes generados
+reports/strategy_reports/*.json
+reports/monthly/*.csv
+
+# Jupyter
+.ipynb_checkpoints/
+
+# LEAN
+lean/.lean/
+
+# Freqtrade
+freqtrade/user_data/backtest_results/
+freqtrade/user_data/logs/
+freqtrade/user_data/tradesv3.sqlite
+freqtrade/user_data/models/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
 
 # Temporales
 txt.txt

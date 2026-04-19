@@ -1,0 +1,30 @@
+sessions:
+  asia:
+    start_utc: "00:00"
+    end_utc: "07:00"
+    description: "Sesión asiática — compresión, rango para breakouts London"
+
+  london:
+    start_utc: "07:00"
+    end_utc: "12:00"
+    description: "Apertura London — máxima liquidez, breakouts, tendencias"
+
+  london_ny_overlap:
+    start_utc: "12:00"
+    end_utc: "16:00"
+    description: "Solapamiento London-NY — mayor volatilidad del día"
+
+  new_york:
+    start_utc: "13:00"
+    end_utc: "21:00"
+    description: "Sesión NY — continuaciones, reversiones, noticias US"
+
+  london_breakout_window:
+    start_utc: "07:00"
+    end_utc: "09:00"
+    description: "Ventana de breakout London — primeras 2 horas"
+
+  news_blackout:
+    - "08:30"  # NFP, CPI y otros datos US importantes
+    - "14:00"  # FOMC y otros
+    buffer_minutes: 30  # No operar 30 min antes ni después

@@ -1,0 +1,24 @@
+backtest:
+  initial_capital: 10000
+  commission_pct: 0.0001
+  slippage_pips: 0.5
+  spread_multiplier: 1.0  # 1.0 = spread normal, 2.0 = stress
+
+validation:
+  is_split: 0.7
+  oos_split: 0.3
+  wf_train_months: 6
+  wf_test_months: 1
+  monte_carlo_runs: 1000
+
+acceptance:
+  min_profit_factor: 1.2
+  min_trades: 30
+  max_drawdown_pct: 0.10
+  min_sharpe: 0.8
+
+reporting:
+  output_format: ["csv", "markdown"]
+  include_equity_curve: true
+  include_monthly_breakdown: true
+  include_ftmo_check: true

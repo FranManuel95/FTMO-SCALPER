@@ -1,2 +1,0 @@
-trade_id,trade_date,entry_hour,side,entry_time,exit_time,entry,exit,sl,tp,risk_distance,bars_in_trade,pnl,r_multiple,exit_reason,be_activated,mfe_r,mae_r,best_r,worst_r,orb_high,orb_low,atr_at_entry,adx_h1_at_entry,balance_after
-1,2025-12-02,11,SELL,2025-12-02 11:25:00,2025-12-02 13:25:00,4200.31,4196.79,4226.5794691088395,4160.905796336741,26.269469108839075,16,6.699792800182698,0.134,timeout,False,0.6852,0.0,0.6852,0.0,4226.22,4203.32,3.5946910883942738,31.408910445920295,10006.699792800182

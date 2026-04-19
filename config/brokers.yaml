@@ -1,0 +1,27 @@
+oanda:
+  name: "OANDA"
+  type: "forex_cfd"
+  api_base: "https://api-fxtrade.oanda.com"
+  practice_api_base: "https://api-fxpractice.oanda.com"
+  supported_assets: ["forex", "metals", "indices"]
+  notes: "Ideal para datos históricos forex y metales"
+
+binance:
+  name: "Binance"
+  type: "crypto"
+  api_base: "https://api.binance.com"
+  supported_assets: ["crypto"]
+  notes: "Datos crypto, útil para Freqtrade"
+
+yahoo_finance:
+  name: "Yahoo Finance"
+  type: "data_only"
+  library: "yfinance"
+  supported_assets: ["forex", "metals", "indices", "crypto"]
+  notes: "Datos gratuitos para research, no para producción"
+
+lean_data:
+  name: "QuantConnect Data"
+  type: "lean_native"
+  supported_assets: ["forex", "metals", "crypto", "equities"]
+  notes: "Datos integrados con LEAN/QuantConnect"
