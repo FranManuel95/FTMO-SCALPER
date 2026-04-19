@@ -90,10 +90,10 @@ def monte_carlo_pnl(
     cum = np.cumsum(sim_pnls, axis=1)
     equity = initial_balance + cum
 
-    # Max drawdown por simulación
+    # Max drawdown por simulación (absoluto, positivo = peor)
     peak = np.maximum.accumulate(equity, axis=1)
     dd_pct = (equity - peak) / initial_balance
-    max_dd = dd_pct.min(axis=1)
+    max_dd_abs = np.abs(dd_pct.min(axis=1))
 
     final = cum[:, -1]
 
@@ -112,9 +112,9 @@ def monte_carlo_pnl(
             "p95": round(float(np.percentile(final, 95)), 1),
         },
         "max_drawdown": {
-            "p50": round(float(np.median(max_dd)), 4),
-            "p95": round(float(np.percentile(max_dd, 95)), 4),
-            "p99": round(float(np.percentile(max_dd, 99)), 4),
+            "p50": round(float(np.percentile(max_dd_abs, 50)), 4),
+            "p90": round(float(np.percentile(max_dd_abs, 90)), 4),
+            "p95": round(float(np.percentile(max_dd_abs, 95)), 4),
         },
         "profit_factor": {
             "p25": round(float(np.percentile(pf_sim, 25)), 3),
@@ -122,8 +122,8 @@ def monte_carlo_pnl(
             "p75": round(float(np.percentile(pf_sim, 75)), 3),
         },
         "prob_positive": round(float((final > 0).mean()), 3),
-        "prob_ruin_10pct": round(float((max_dd < -0.10).mean()), 4),
-        "prob_ruin_5pct": round(float((max_dd < -0.05).mean()), 4),
+        "prob_ruin_10pct": round(float((max_dd_abs > 0.10).mean()), 4),
+        "prob_ruin_5pct": round(float((max_dd_abs > 0.05).mean()), 4),
     }
 
 
@@ -231,7 +231,7 @@ def run_validation(
         print(f"MONTE CARLO — {len(all_oos_pnls)} trades OOS ({n_mc:,} simulaciones)")
         mc = monte_carlo_pnl(all_oos_pnls, initial_balance=initial_balance, n_sims=n_mc)
         print(f"  PnL neto  p5/median/p95 : ${mc['net_pnl']['p5']:+.0f} / ${mc['net_pnl']['median']:+.0f} / ${mc['net_pnl']['p95']:+.0f}")
-        print(f"  Max DD    p50/p95/p99   : {mc['max_drawdown']['p50']:.1%} / {mc['max_drawdown']['p95']:.1%} / {mc['max_drawdown']['p99']:.1%}")
+        print(f"  Max DD    p50/p90/p95   : {mc['max_drawdown']['p50']:.1%} / {mc['max_drawdown']['p90']:.1%} / {mc['max_drawdown']['p95']:.1%}  (peor caso)")
         print(f"  PF        p25/med/p75   : {mc['profit_factor']['p25']:.3f} / {mc['profit_factor']['median']:.3f} / {mc['profit_factor']['p75']:.3f}")
         print(f"  P(positivo)             : {mc['prob_positive']:.1%}")
         print(f"  P(ruin DD>10%)          : {mc['prob_ruin_10pct']:.1%}")
@@ -240,17 +240,19 @@ def run_validation(
         mc = {}
         print("  [!] No se encontraron trade logs OOS para Monte Carlo")
 
-    # Veredicto — basado en OOS pass rate y WFE (si disponible)
+    # Veredicto — primario: OOS pass rate + avg OOS PF; secundario: WFE si disponible
     oos_pass_rate = oos_pass / len(windows)
-    wfe_ok = (not valid_wfe) or avg_wfe >= 0.3  # si no hay WFE válido, no penalizar
-    robust = oos_pass_rate >= 0.5 and wfe_ok
+    # WFE solo penaliza si hay suficientes ventanas válidas (≥2) y el promedio es negativo
+    wfe_penalty = len(valid_wfe) >= 2 and avg_wfe < 0.0
 
     print(f"\n{'='*60}")
-    if robust:
+    if oos_pass_rate >= 0.5 and avg_oos_pf >= 1.3 and not wfe_penalty:
         if avg_oos_pf >= 1.5:
             verdict = "ESTRATEGIA ROBUSTA — edge real, apta para live con gestión de régimen"
         else:
             verdict = "ESTRATEGIA MARGINAL — edge presente pero delgado, requiere confirmación"
+    elif oos_pass_rate >= 0.5 and wfe_penalty:
+        verdict = "EDGE DEPENDIENTE DE RÉGIMEN — rentable en tendencia, revisar filtros macro"
     else:
         verdict = "EDGE INESTABLE — no apta para live trading sin mejoras adicionales"
     print(f"VEREDICTO: {verdict}")
@@ -270,9 +272,10 @@ def run_validation(
         "summary": {
             "oos_pass": int(oos_pass),
             "total_windows": len(windows),
+            "oos_pass_rate": round(oos_pass_rate, 3),
             "avg_oos_pf": round(avg_oos_pf, 3),
-            "avg_wfe": round(avg_wfe, 3),
-            "robust": robust,
+            "avg_wfe": round(avg_wfe, 3) if valid_wfe else None,
+            "verdict": verdict,
         },
         "monte_carlo": mc,
     }

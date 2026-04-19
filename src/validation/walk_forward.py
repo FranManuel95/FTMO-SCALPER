@@ -54,8 +54,9 @@ def walk_forward_windows(
 def walk_forward_efficiency(is_pf: float, oos_pf: float) -> float | None:
     """
     WFE: qué fracción del edge IS se mantiene en OOS. Objetivo ≥ 0.5.
-    Retorna None cuando IS PF ≤ 1.0 (IS ya era perdedor — WFE indefinido).
+    Retorna None cuando IS PF < 1.2 — denominador demasiado pequeño para
+    que el ratio sea estable o interpretable.
     """
-    if is_pf <= 1.0:
-        return None  # IS perdedor: no hay edge que medir
+    if is_pf < 1.2:
+        return None
     return (oos_pf - 1.0) / (is_pf - 1.0)
