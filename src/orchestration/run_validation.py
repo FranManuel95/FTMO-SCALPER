@@ -176,10 +176,13 @@ def run_validation(
 
         is_pf  = _pf(is_res)
         oos_pf = _pf(oos_res)
-        wfe    = walk_forward_efficiency(is_pf, oos_pf)
+        wfe    = walk_forward_efficiency(is_pf, oos_pf)  # None when IS PF ≤ 1.0
 
         # Acumular trade PnLs OOS para Monte Carlo (directamente del resultado)
         all_oos_pnls.extend(oos_res.get("trade_pnls", []))
+
+        wfe_str = f"{wfe:.3f}" if wfe is not None else "n/a (IS perdedor)"
+        wfe_ok  = wfe is not None and wfe >= 0.5
 
         row = {
             "window": f"W{i}",
@@ -195,27 +198,32 @@ def run_validation(
             "oos_pf": round(oos_pf, 3),
             "oos_pnl": round(_net(oos_res), 1),
             "oos_dd": round(_dd(oos_res), 3),
-            "wfe": round(wfe, 3),
+            "wfe": wfe,
         }
         rows.append(row)
 
         status = "✓" if oos_pf >= 1.0 else "✗"
         print(f"     IS  → PF {is_pf:.3f} | WR {_wr(is_res):.1%} | PnL ${_net(is_res):+.0f} | DD {_dd(is_res):.1%}")
         print(f"     OOS → PF {oos_pf:.3f} | WR {_wr(oos_res):.1%} | PnL ${_net(oos_res):+.0f} | DD {_dd(oos_res):.1%}  {status}")
-        print(f"     WFE = {wfe:.3f}  ({'PASS ≥0.5' if wfe >= 0.5 else 'FAIL <0.5'})\n")
+        print(f"     WFE = {wfe_str}  ({'PASS ≥0.5' if wfe_ok else ('FAIL <0.5' if wfe is not None else 'N/A')})\n")
 
     df = pd.DataFrame(rows)
 
-    # Resumen walk-forward
-    oos_pass = (df["oos_pf"] >= 1.0).sum()
-    avg_wfe = df["wfe"].mean()
+    # Resumen walk-forward — WFE solo sobre ventanas con IS PF > 1.0
+    oos_pass  = (df["oos_pf"] >= 1.0).sum()
     avg_oos_pf = df["oos_pf"].mean()
+    valid_wfe = [r["wfe"] for r in rows if r["wfe"] is not None]
+    avg_wfe   = sum(valid_wfe) / len(valid_wfe) if valid_wfe else float("nan")
 
     print(f"{'─'*60}")
     print(f"RESUMEN WALK-FORWARD ({len(windows)} ventanas)")
+    n_wfe_valid = len(valid_wfe)
     print(f"  OOS windows rentables : {oos_pass}/{len(windows)}")
     print(f"  PF medio OOS          : {avg_oos_pf:.3f}")
-    print(f"  WFE medio             : {avg_wfe:.3f}  (objetivo ≥ 0.5)")
+    if valid_wfe:
+        print(f"  WFE medio             : {avg_wfe:.3f}  (sobre {n_wfe_valid} ventanas con IS PF>1.0; objetivo ≥ 0.5)")
+    else:
+        print(f"  WFE medio             : n/a (todas las ventanas IS tuvieron PF ≤ 1.0)")
 
     # Monte Carlo
     print(f"\n{'─'*60}")
@@ -232,11 +240,23 @@ def run_validation(
         mc = {}
         print("  [!] No se encontraron trade logs OOS para Monte Carlo")
 
-    # Veredicto
+    # Veredicto — basado en OOS pass rate y WFE (si disponible)
+    oos_pass_rate = oos_pass / len(windows)
+    wfe_ok = (not valid_wfe) or avg_wfe >= 0.3  # si no hay WFE válido, no penalizar
+    robust = oos_pass_rate >= 0.5 and wfe_ok
+
     print(f"\n{'='*60}")
-    robust = oos_pass >= len(windows) * 0.5 and avg_wfe >= 0.3
-    verdict = "ESTRATEGIA ROBUSTA — apta para live trading" if robust else "EDGE INESTABLE — no apta para live trading sin mejoras"
+    if robust:
+        if avg_oos_pf >= 1.5:
+            verdict = "ESTRATEGIA ROBUSTA — edge real, apta para live con gestión de régimen"
+        else:
+            verdict = "ESTRATEGIA MARGINAL — edge presente pero delgado, requiere confirmación"
+    else:
+        verdict = "EDGE INESTABLE — no apta para live trading sin mejoras adicionales"
     print(f"VEREDICTO: {verdict}")
+    print(f"  OOS pass rate: {oos_pass_rate:.0%}  |  PF OOS medio: {avg_oos_pf:.3f}")
+    if valid_wfe:
+        print(f"  WFE ({n_wfe_valid} ventanas válidas): {avg_wfe:.3f}")
     print(f"{'='*60}\n")
 
     # Guardar resultados

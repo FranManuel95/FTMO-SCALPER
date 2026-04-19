@@ -51,8 +51,11 @@ def walk_forward_windows(
     return windows
 
 
-def walk_forward_efficiency(is_pf: float, oos_pf: float) -> float:
-    """WFE: qué fracción del IS se mantiene en OOS. >0.5 es aceptable."""
+def walk_forward_efficiency(is_pf: float, oos_pf: float) -> float | None:
+    """
+    WFE: qué fracción del edge IS se mantiene en OOS. Objetivo ≥ 0.5.
+    Retorna None cuando IS PF ≤ 1.0 (IS ya era perdedor — WFE indefinido).
+    """
     if is_pf <= 1.0:
-        return 0.0
+        return None  # IS perdedor: no hay edge que medir
     return (oos_pf - 1.0) / (is_pf - 1.0)
