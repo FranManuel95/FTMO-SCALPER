@@ -3,15 +3,18 @@ Script principal de backtest para una estrategia dada.
 
 Uso:
   python -m src.orchestration.run_backtest --strategy breakout --symbol XAUUSD
-  python -m src.orchestration.run_backtest --strategy pullback --symbol EURUSD --timeframe 1h
+  python -m src.orchestration.run_backtest --strategy breakout --symbol XAUUSD --no-htf
+  python -m src.orchestration.run_backtest --strategy breakout --symbol XAUUSD --diagnostic
 
 Fuente de datos (en orden de prioridad):
   1. CSVs locales de MetaTrader 5 (backtest/data/ o data/raw/)
-  2. Yahoo Finance como fallback (solo datos recientes < 60 días para intraday)
+  2. Yahoo Finance como fallback (solo datos recientes)
 """
 import argparse
+import csv
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 from src.core.logging import setup_logging
 from src.core.paths import REPORTS_DIR
@@ -26,7 +29,6 @@ from src.risk.position_sizing import size_by_fixed_risk
 
 
 def get_loader(symbol: str, timeframe: str, data_dir: str | None = None):
-    """Retorna el loader más apropiado: MT5 CSV si existe, Yahoo si no."""
     csv_path = find_csv(symbol, timeframe)
     if csv_path is not None:
         print(f"[data] Usando CSV local: {csv_path}")
@@ -44,7 +46,9 @@ def run_backtest(
     initial_balance: float = 10000.0,
     risk_pct: float = 0.01,
     data_dir: str | None = None,
-    tz_offset: int = 0,
+    tz_offset: int = 2,
+    htf_trend: bool = True,
+    diagnostic: bool = False,
 ) -> dict:
     setup_logging()
 
@@ -60,12 +64,19 @@ def run_backtest(
 
     if strategy == "breakout":
         from src.signals.breakout.london_breakout import LondonBreakoutConfig, generate_london_breakout_signals
-        cfg = LondonBreakoutConfig(tz_offset_hours=tz_offset)
-        print(f"[signals] Asian range: {cfg.asian_start_h:02d}:00-{cfg.asian_end_h:02d}:00 | London: {cfg.london_start_h:02d}:00-{cfg.london_end_h:02d}:00 (broker time)")
-        signals = generate_london_breakout_signals(df, cfg)
+        cfg = LondonBreakoutConfig(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        htf_label = f"H4 trend {'ON' if htf_trend else 'OFF'}"
+        print(f"[signals] Asian: {cfg.asian_start_h:02d}:00-{cfg.asian_end_h:02d}:00 | London: {cfg.london_start_h:02d}:00-{cfg.london_end_h:02d}:00 | {htf_label}")
+        result = generate_london_breakout_signals(df, cfg, return_diagnostics=diagnostic)
+        if diagnostic:
+            signals, diag_rows = result
+        else:
+            signals = result
+            diag_rows = []
     elif strategy == "pullback":
         from src.signals.pullback.trend_pullback import generate_pullback_signals
         signals = generate_pullback_signals(df)
+        diag_rows = []
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
 
@@ -75,6 +86,8 @@ def run_backtest(
     max_guard = MaxLossGuard(initial_balance)
 
     trades: list[Trade] = []
+    trade_log: list[dict] = []
+
     for sig in signals:
         if max_guard.is_triggered():
             print("[risk] MaxLossGuard activado — deteniendo simulación")
@@ -87,21 +100,24 @@ def run_backtest(
         future = df[df.index > sig.timestamp]
         exit_price = None
         exit_time = None
+        outcome = "open"
+        bars_to_exit = 0
 
         for ts, bar in future.iterrows():
+            bars_to_exit += 1
             if sig.side == Side.LONG:
                 if bar["low"] <= sig.stop_loss:
-                    exit_price, exit_time = sig.stop_loss, ts
+                    exit_price, exit_time, outcome = sig.stop_loss, ts, "SL"
                     break
                 if bar["high"] >= sig.take_profit:
-                    exit_price, exit_time = sig.take_profit, ts
+                    exit_price, exit_time, outcome = sig.take_profit, ts, "TP"
                     break
             else:
                 if bar["high"] >= sig.stop_loss:
-                    exit_price, exit_time = sig.stop_loss, ts
+                    exit_price, exit_time, outcome = sig.stop_loss, ts, "SL"
                     break
                 if bar["low"] <= sig.take_profit:
-                    exit_price, exit_time = sig.take_profit, ts
+                    exit_price, exit_time, outcome = sig.take_profit, ts, "TP"
                     break
 
         trade = Trade(
@@ -119,6 +135,19 @@ def run_backtest(
             daily_guard.record_pnl(trade.pnl, exit_time)
             max_guard.update(trade.pnl)
 
+            trade_log.append({
+                "entry_time": str(sig.timestamp),
+                "exit_time": str(exit_time),
+                "side": sig.side.value,
+                "entry": round(sig.entry_price, 3),
+                "sl": round(sig.stop_loss, 3),
+                "tp": round(sig.take_profit, 3),
+                "exit": round(exit_price, 3),
+                "outcome": outcome,
+                "pnl": round(trade.pnl, 2),
+                "bars_to_exit": bars_to_exit,
+            })
+
         trades.append(trade)
 
     results = {
@@ -127,6 +156,7 @@ def run_backtest(
         "period": f"{start} to {end}",
         "timeframe": timeframe,
         "tz_offset_hours": tz_offset,
+        "htf_trend_filter": htf_trend,
         "total_signals": len(signals),
         "total_trades": len([t for t in trades if t.exit_time is not None]),
         "performance": summary(trades, initial_balance),
@@ -134,30 +164,52 @@ def run_backtest(
     }
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    report_path = REPORTS_DIR / "strategy_reports" / f"{symbol}_{strategy}_{timeframe}.json"
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(report_path, "w") as f:
+    report_dir = REPORTS_DIR / "strategy_reports"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    tag = f"{'htf' if htf_trend else 'nohtf'}"
+    base = f"{symbol}_{strategy}_{timeframe}_{tag}"
+
+    with open(report_dir / f"{base}.json", "w") as f:
         json.dump(results, f, indent=2, default=str)
 
-    print(f"[report] Guardado en {report_path}")
+    if trade_log:
+        log_path = report_dir / f"{base}_trades.csv"
+        with open(log_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=trade_log[0].keys())
+            writer.writeheader()
+            writer.writerows(trade_log)
+        print(f"[report] Trade log: {log_path}")
+
+    if diagnostic and diag_rows:
+        diag_path = report_dir / f"{base}_diagnostic.csv"
+        with open(diag_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=diag_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(diag_rows)
+        print(f"[report] Diagnóstico: {diag_path}")
+
+    print(f"[report] Guardado en {report_dir / f'{base}.json'}")
     return results
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Backtest de estrategias Trading Research Lab")
-    parser.add_argument("--symbol", default="XAUUSD", help="Símbolo (XAUUSD, EURUSD, ...)")
+    parser = argparse.ArgumentParser(description="Backtest — Trading Research Lab")
+    parser.add_argument("--symbol", default="XAUUSD")
     parser.add_argument("--strategy", default="breakout", choices=["breakout", "pullback"])
-    parser.add_argument("--start", default="2023-01-01", help="Fecha inicio YYYY-MM-DD")
-    parser.add_argument("--end", default="2024-01-01", help="Fecha fin YYYY-MM-DD")
-    parser.add_argument("--timeframe", default="15m", help="Timeframe: 1m 5m 15m 30m 1h 4h 1d")
-    parser.add_argument("--balance", type=float, default=10000.0, help="Capital inicial")
-    parser.add_argument("--risk", type=float, default=0.01, help="Riesgo por trade (0.01 = 1%%)")
-    parser.add_argument("--data-dir", default=None, help="Ruta a carpeta con CSVs de MT5")
-    parser.add_argument("--tz-offset", type=int, default=2, help="Offset UTC del broker (2=UTC+2, 3=UTC+3)")
+    parser.add_argument("--start", default="2023-01-01")
+    parser.add_argument("--end", default="2024-01-01")
+    parser.add_argument("--timeframe", default="15m")
+    parser.add_argument("--balance", type=float, default=10000.0)
+    parser.add_argument("--risk", type=float, default=0.01)
+    parser.add_argument("--data-dir", default=None)
+    parser.add_argument("--tz-offset", type=int, default=2)
+    parser.add_argument("--no-htf", action="store_true", help="Desactivar filtro de tendencia H4")
+    parser.add_argument("--diagnostic", action="store_true", help="Guardar CSV con motivo de cada señal rechazada")
     args = parser.parse_args()
 
     results = run_backtest(
         args.symbol, args.strategy, args.start, args.end,
-        args.timeframe, args.balance, args.risk, args.data_dir, args.tz_offset,
+        args.timeframe, args.balance, args.risk, args.data_dir,
+        args.tz_offset, not args.no_htf, args.diagnostic,
     )
     print(json.dumps(results, indent=2, default=str))
