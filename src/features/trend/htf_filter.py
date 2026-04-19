@@ -1,5 +1,11 @@
 import pandas as pd
-import talib
+
+try:
+    import talib as _talib
+    _USE_TALIB = True
+except ImportError:
+    _USE_TALIB = False
+    from ta.trend import EMAIndicator
 
 
 def add_htf_trend(
@@ -17,8 +23,12 @@ def add_htf_trend(
     ohlcv = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
     htf = df.resample(htf_resample).agg(ohlcv).dropna(subset=["close"])
 
-    htf[f"htf_ema_{ema_fast}"] = talib.EMA(htf["close"].values, timeperiod=ema_fast)
-    htf[f"htf_ema_{ema_slow}"] = talib.EMA(htf["close"].values, timeperiod=ema_slow)
+    if _USE_TALIB:
+        htf[f"htf_ema_{ema_fast}"] = _talib.EMA(htf["close"].values, timeperiod=ema_fast)
+        htf[f"htf_ema_{ema_slow}"] = _talib.EMA(htf["close"].values, timeperiod=ema_slow)
+    else:
+        htf[f"htf_ema_{ema_fast}"] = EMAIndicator(htf["close"], window=ema_fast, fillna=False).ema_indicator()
+        htf[f"htf_ema_{ema_slow}"] = EMAIndicator(htf["close"], window=ema_slow, fillna=False).ema_indicator()
 
     def _trend(row):
         f = row[f"htf_ema_{ema_fast}"]
