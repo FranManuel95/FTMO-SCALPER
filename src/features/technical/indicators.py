@@ -1,45 +1,50 @@
 import pandas as pd
-import pandas_ta as ta
-
-
-def add_adx(df: pd.DataFrame, length: int = 14) -> pd.DataFrame:
-    adx = ta.adx(df["high"], df["low"], df["close"], length=length)
-    df[f"adx_{length}"] = adx[f"ADX_{length}"]
-    df[f"dmp_{length}"] = adx[f"DMP_{length}"]
-    df[f"dmn_{length}"] = adx[f"DMN_{length}"]
-    return df
+from ta.trend import ADXIndicator, EMAIndicator, MACD
+from ta.momentum import RSIIndicator
+from ta.volatility import AverageTrueRange, BollingerBands
 
 
 def add_atr(df: pd.DataFrame, length: int = 14) -> pd.DataFrame:
-    df[f"atr_{length}"] = ta.atr(df["high"], df["low"], df["close"], length=length)
+    atr = AverageTrueRange(df["high"], df["low"], df["close"], window=length, fillna=False)
+    df[f"atr_{length}"] = atr.average_true_range()
+    return df
+
+
+def add_adx(df: pd.DataFrame, length: int = 14) -> pd.DataFrame:
+    adx = ADXIndicator(df["high"], df["low"], df["close"], window=length, fillna=False)
+    df[f"adx_{length}"] = adx.adx()
+    df[f"dmp_{length}"] = adx.adx_pos()
+    df[f"dmn_{length}"] = adx.adx_neg()
     return df
 
 
 def add_ema(df: pd.DataFrame, lengths: list[int] = [20, 50, 200]) -> pd.DataFrame:
     for length in lengths:
-        df[f"ema_{length}"] = ta.ema(df["close"], length=length)
+        ema = EMAIndicator(df["close"], window=length, fillna=False)
+        df[f"ema_{length}"] = ema.ema_indicator()
     return df
 
 
 def add_rsi(df: pd.DataFrame, length: int = 14) -> pd.DataFrame:
-    df[f"rsi_{length}"] = ta.rsi(df["close"], length=length)
+    rsi = RSIIndicator(df["close"], window=length, fillna=False)
+    df[f"rsi_{length}"] = rsi.rsi()
     return df
 
 
 def add_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
-    macd = ta.macd(df["close"], fast=fast, slow=slow, signal=signal)
-    df["macd"] = macd[f"MACD_{fast}_{slow}_{signal}"]
-    df["macd_signal"] = macd[f"MACDs_{fast}_{slow}_{signal}"]
-    df["macd_hist"] = macd[f"MACDh_{fast}_{slow}_{signal}"]
+    macd = MACD(df["close"], window_fast=fast, window_slow=slow, window_sign=signal, fillna=False)
+    df["macd"] = macd.macd()
+    df["macd_signal"] = macd.macd_signal()
+    df["macd_hist"] = macd.macd_diff()
     return df
 
 
 def add_bollinger(df: pd.DataFrame, length: int = 20, std: float = 2.0) -> pd.DataFrame:
-    bb = ta.bbands(df["close"], length=length, std=std)
-    df["bb_upper"] = bb[f"BBU_{length}_{std}"]
-    df["bb_mid"] = bb[f"BBM_{length}_{std}"]
-    df["bb_lower"] = bb[f"BBL_{length}_{std}"]
-    df["bb_width"] = bb[f"BBB_{length}_{std}"]
+    bb = BollingerBands(df["close"], window=length, window_dev=std, fillna=False)
+    df["bb_upper"] = bb.bollinger_hband()
+    df["bb_mid"] = bb.bollinger_mavg()
+    df["bb_lower"] = bb.bollinger_lband()
+    df["bb_width"] = bb.bollinger_wband()
     return df
 
 
