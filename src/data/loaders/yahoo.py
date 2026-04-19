@@ -27,7 +27,13 @@ class YahooLoader(BaseLoader):
         interval = TIMEFRAME_MAP.get(timeframe, timeframe)
 
         df = yf.download(ticker, start=start, end=end, interval=interval, progress=False, auto_adjust=True)
-        df.columns = [c.lower() for c in df.columns]
+
+        # yfinance puede retornar MultiIndex de columnas — aplanarlo
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [col[0].lower() for col in df.columns]
+        else:
+            df.columns = [c.lower() for c in df.columns]
+
         df.index = pd.to_datetime(df.index, utc=True)
         df.index.name = "datetime"
 
