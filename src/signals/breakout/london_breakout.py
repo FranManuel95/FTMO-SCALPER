@@ -11,12 +11,14 @@ from src.features.technical.indicators import add_adx, add_atr
 @dataclass
 class LondonBreakoutConfig:
     adx_min: float = 22.0
-    atr_min_mult: float = 1.0
     rr_target: float = 2.0
-    breakout_buffer_atr: float = 0.1
+    breakout_buffer_atr: float = 0.2   # buffer encima/debajo del rango para confirmar breakout
+    atr_sl_mult: float = 1.5           # SL = entrada ± ATR * atr_sl_mult (NO el rango completo)
+    asian_range_min_atr: float = 0.5   # rango asiático mínimo como múltiplo del ATR (filtra dias planos)
+    asian_range_max_atr: float = 4.0   # rango asiático máximo (filtra dias con gap/noticias)
     max_signals_per_day: int = 1
-    # Offset del timezone del broker respecto a UTC (ej: 2 para UTC+2, 3 para UTC+3)
-    tz_offset_hours: int = 0
+    # Offset timezone del broker respecto a UTC (2 = UTC+2 EET, 3 = UTC+3 EEST)
+    tz_offset_hours: int = 2
 
     @property
     def asian_start_h(self) -> int:
@@ -43,10 +45,11 @@ def generate_london_breakout_signals(
     Estrategia de breakout del rango asiático en apertura London.
 
     Lógica:
-    1. Identificar rango asiático según horario del broker
-    2. En ventana London del broker, detectar cierre fuera del rango
-    3. Confirmar con ADX > mínimo y ATR > mínimo
-    4. Generar señal con SL en límite opuesto del rango
+    1. Rango asiático (broker time) define el contexto de compresión
+    2. En ventana London, detectar cierre fuera del rango + buffer
+    3. Confirmar con ADX > mínimo
+    4. Filtrar rangos asiáticos anormalmente pequeños o grandes
+    5. SL = entrada ± ATR*mult (no el rango completo — más RR realista)
     """
     if config is None:
         config = LondonBreakoutConfig()
@@ -68,35 +71,39 @@ def generate_london_breakout_signals(
         hour = ts.hour
         day_key = ts.strftime("%Y-%m-%d")
 
-        # Ventana London (puede cruzar medianoche si tz_offset es grande)
-        if ls_h < le_h:
-            in_london = ls_h <= hour < le_h
-        else:
-            in_london = hour >= ls_h or hour < le_h
-
+        # Ventana London en hora del broker
+        in_london = (hour >= ls_h and hour < le_h) if ls_h < le_h else (hour >= ls_h or hour < le_h)
         if not in_london:
             continue
 
         if signals_today.get(day_key, 0) >= config.max_signals_per_day:
             continue
 
-        if pd.isna(row.get("asian_high")) or pd.isna(row.get("adx_14")):
+        atr = row.get("atr_14")
+        asian_high = row.get("asian_high")
+        asian_low = row.get("asian_low")
+        asian_range = row.get("asian_range")
+        adx = row.get("adx_14")
+
+        if any(pd.isna(v) for v in [atr, asian_high, asian_low, asian_range, adx]):
             continue
 
-        atr = row["atr_14"]
-        if pd.isna(atr) or atr < config.atr_min_mult * 0.0001:
+        # Filtro ADX: tendencia mínima
+        if adx < config.adx_min:
             continue
 
-        if row["adx_14"] < config.adx_min:
+        # Filtro rango asiático: ni demasiado pequeño ni demasiado grande
+        if asian_range < atr * config.asian_range_min_atr:
+            continue
+        if asian_range > atr * config.asian_range_max_atr:
             continue
 
         buffer = config.breakout_buffer_atr * atr
         close = row["close"]
-        asian_high = row["asian_high"]
-        asian_low = row["asian_low"]
 
         if close > asian_high + buffer:
-            sl = asian_low
+            # SL basado en ATR desde la entrada, no en el rango completo
+            sl = close - atr * config.atr_sl_mult
             risk = close - sl
             tp = close + risk * config.rr_target
             signals.append(Signal(
@@ -111,7 +118,7 @@ def generate_london_breakout_signals(
             signals_today[day_key] = signals_today.get(day_key, 0) + 1
 
         elif close < asian_low - buffer:
-            sl = asian_high
+            sl = close + atr * config.atr_sl_mult
             risk = sl - close
             tp = close - risk * config.rr_target
             signals.append(Signal(
