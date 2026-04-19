@@ -182,10 +182,13 @@ def run_backtest(
 
     if diagnostic and diag_rows:
         diag_path = report_dir / f"{base}_diagnostic.csv"
+        diag_fields = ["ts", "reason", "side", "close", "entry", "sl", "tp",
+                       "asian_range", "atr", "adx", "htf_trend", "rr"]
         with open(diag_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=diag_rows[0].keys())
+            writer = csv.DictWriter(f, fieldnames=diag_fields, extrasaction="ignore")
             writer.writeheader()
-            writer.writerows(diag_rows)
+            # Normalizar filas: rellenar campos faltantes con ""
+            writer.writerows({k: row.get(k, "") for k in diag_fields} for row in diag_rows)
         print(f"[report] Diagnóstico: {diag_path}")
 
     print(f"[report] Guardado en {report_dir / f'{base}.json'}")
