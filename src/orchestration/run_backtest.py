@@ -44,6 +44,7 @@ def run_backtest(
     initial_balance: float = 10000.0,
     risk_pct: float = 0.01,
     data_dir: str | None = None,
+    tz_offset: int = 0,
 ) -> dict:
     setup_logging()
 
@@ -58,8 +59,10 @@ def run_backtest(
     print(f"[data] Cargadas {len(df)} velas de {symbol} {timeframe} ({df.index[0]} → {df.index[-1]})")
 
     if strategy == "breakout":
-        from src.signals.breakout.london_breakout import generate_london_breakout_signals
-        signals = generate_london_breakout_signals(df)
+        from src.signals.breakout.london_breakout import LondonBreakoutConfig, generate_london_breakout_signals
+        cfg = LondonBreakoutConfig(tz_offset_hours=tz_offset)
+        print(f"[signals] Asian range: {cfg.asian_start_h:02d}:00-{cfg.asian_end_h:02d}:00 | London: {cfg.london_start_h:02d}:00-{cfg.london_end_h:02d}:00 (broker time)")
+        signals = generate_london_breakout_signals(df, cfg)
     elif strategy == "pullback":
         from src.signals.pullback.trend_pullback import generate_pullback_signals
         signals = generate_pullback_signals(df)
@@ -123,6 +126,7 @@ def run_backtest(
         "strategy": strategy,
         "period": f"{start} to {end}",
         "timeframe": timeframe,
+        "tz_offset_hours": tz_offset,
         "total_signals": len(signals),
         "total_trades": len([t for t in trades if t.exit_time is not None]),
         "performance": summary(trades, initial_balance),
@@ -149,10 +153,11 @@ if __name__ == "__main__":
     parser.add_argument("--balance", type=float, default=10000.0, help="Capital inicial")
     parser.add_argument("--risk", type=float, default=0.01, help="Riesgo por trade (0.01 = 1%%)")
     parser.add_argument("--data-dir", default=None, help="Ruta a carpeta con CSVs de MT5")
+    parser.add_argument("--tz-offset", type=int, default=2, help="Offset UTC del broker (2=UTC+2, 3=UTC+3)")
     args = parser.parse_args()
 
     results = run_backtest(
         args.symbol, args.strategy, args.start, args.end,
-        args.timeframe, args.balance, args.risk, args.data_dir,
+        args.timeframe, args.balance, args.risk, args.data_dir, args.tz_offset,
     )
     print(json.dumps(results, indent=2, default=str))

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 import pandas as pd
@@ -13,10 +13,26 @@ class LondonBreakoutConfig:
     adx_min: float = 22.0
     atr_min_mult: float = 1.0
     rr_target: float = 2.0
-    london_start_utc: str = "07:00"
-    london_end_utc: str = "12:00"
     breakout_buffer_atr: float = 0.1
     max_signals_per_day: int = 1
+    # Offset del timezone del broker respecto a UTC (ej: 2 para UTC+2, 3 para UTC+3)
+    tz_offset_hours: int = 0
+
+    @property
+    def asian_start_h(self) -> int:
+        return (0 + self.tz_offset_hours) % 24
+
+    @property
+    def asian_end_h(self) -> int:
+        return (7 + self.tz_offset_hours) % 24
+
+    @property
+    def london_start_h(self) -> int:
+        return (7 + self.tz_offset_hours) % 24
+
+    @property
+    def london_end_h(self) -> int:
+        return (12 + self.tz_offset_hours) % 24
 
 
 def generate_london_breakout_signals(
@@ -27,24 +43,24 @@ def generate_london_breakout_signals(
     Estrategia de breakout del rango asiático en apertura London.
 
     Lógica:
-    1. Identificar rango asiático (00:00-07:00 UTC)
-    2. En ventana London, detectar cierre fuera del rango
-    3. Confirmar con ADX H1 > mínimo
+    1. Identificar rango asiático según horario del broker
+    2. En ventana London del broker, detectar cierre fuera del rango
+    3. Confirmar con ADX > mínimo y ATR > mínimo
     4. Generar señal con SL en límite opuesto del rango
     """
     if config is None:
         config = LondonBreakoutConfig()
 
     df = df.copy()
-    df = add_asian_range(df)
+    df = add_asian_range(df, session_start_h=config.asian_start_h, session_end_h=config.asian_end_h)
     df = add_atr(df, 14)
     df = add_adx(df, 14)
 
     signals: list[Signal] = []
     signals_today: dict[str, int] = {}
 
-    london_start_h = int(config.london_start_utc.split(":")[0])
-    london_end_h = int(config.london_end_utc.split(":")[0])
+    ls_h = config.london_start_h
+    le_h = config.london_end_h
 
     for i in range(1, len(df)):
         row = df.iloc[i]
@@ -52,7 +68,13 @@ def generate_london_breakout_signals(
         hour = ts.hour
         day_key = ts.strftime("%Y-%m-%d")
 
-        if not (london_start_h <= hour < london_end_h):
+        # Ventana London (puede cruzar medianoche si tz_offset es grande)
+        if ls_h < le_h:
+            in_london = ls_h <= hour < le_h
+        else:
+            in_london = hour >= ls_h or hour < le_h
+
+        if not in_london:
             continue
 
         if signals_today.get(day_key, 0) >= config.max_signals_per_day:
@@ -65,8 +87,7 @@ def generate_london_breakout_signals(
         if pd.isna(atr) or atr < config.atr_min_mult * 0.0001:
             continue
 
-        adx = row["adx_14"]
-        if adx < config.adx_min:
+        if row["adx_14"] < config.adx_min:
             continue
 
         buffer = config.breakout_buffer_atr * atr
@@ -78,7 +99,7 @@ def generate_london_breakout_signals(
             sl = asian_low
             risk = close - sl
             tp = close + risk * config.rr_target
-            signal = Signal(
+            signals.append(Signal(
                 symbol=df.attrs.get("symbol", "UNKNOWN"),
                 side=Side.LONG,
                 signal_type=SignalType.BREAKOUT,
@@ -86,15 +107,14 @@ def generate_london_breakout_signals(
                 entry_price=close,
                 stop_loss=sl,
                 take_profit=tp,
-            )
-            signals.append(signal)
+            ))
             signals_today[day_key] = signals_today.get(day_key, 0) + 1
 
         elif close < asian_low - buffer:
             sl = asian_high
             risk = sl - close
             tp = close - risk * config.rr_target
-            signal = Signal(
+            signals.append(Signal(
                 symbol=df.attrs.get("symbol", "UNKNOWN"),
                 side=Side.SHORT,
                 signal_type=SignalType.BREAKOUT,
@@ -102,8 +122,7 @@ def generate_london_breakout_signals(
                 entry_price=close,
                 stop_loss=sl,
                 take_profit=tp,
-            )
-            signals.append(signal)
+            ))
             signals_today[day_key] = signals_today.get(day_key, 0) + 1
 
     return signals
