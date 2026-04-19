@@ -77,7 +77,7 @@ def check_consistency(
         "months_traded": len(monthly),
         "profitable_months": int(profitable_months),
         "monthly_pnl": monthly.to_dict(),
-        "passed": profitable_months >= len(monthly) * 0.6,
+        "passed": bool(profitable_months >= len(monthly) * 0.6),
     }
 
 
