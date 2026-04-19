@@ -6,7 +6,7 @@ import pandas as pd
 from src.core.types import Side, Signal, SignalType
 from src.features.session.asian_range import add_asian_range
 from src.features.technical.indicators import add_adx, add_atr
-from src.features.trend.htf_filter import add_htf_trend, add_weekly_regime
+from src.features.trend.htf_filter import add_daily_trend, add_htf_trend, add_weekly_regime
 
 
 @dataclass
@@ -27,6 +27,8 @@ class LondonBreakoutConfig:
     # Filtro macro semanal
     weekly_regime_enabled: bool = False
     weekly_ema_period: int = 50
+    # Filtro de régimen diario: EMA50 vs EMA200 daily (golden/death cross)
+    daily_trend_enabled: bool = False
 
     @property
     def asian_start_h(self) -> int:
@@ -90,6 +92,9 @@ def generate_london_breakout_signals(
     if config.weekly_regime_enabled:
         df = add_weekly_regime(df, ema_period=config.weekly_ema_period)
 
+    if config.daily_trend_enabled:
+        df = add_daily_trend(df)
+
     signals: list[Signal] = []
     diagnostics: list[dict] = []
     signals_today: dict[str, int] = {}
@@ -114,6 +119,7 @@ def generate_london_breakout_signals(
         adx = row.get("adx_14")
         htf_trend = int(row.get("htf_trend", 0)) if config.htf_trend_enabled else 0
         weekly_regime = row.get("weekly_regime", 0) if config.weekly_regime_enabled else 0
+        daily_trend = int(row.get("daily_trend", 0)) if config.daily_trend_enabled else 0
         close = row["close"]
 
         if any(pd.isna(v) for v in [atr, asian_high, asian_low, asian_range, adx]):
@@ -163,6 +169,13 @@ def generate_london_breakout_signals(
             if is_long_break and weekly_regime < 0:
                 continue
             if is_short_break and weekly_regime > 0:
+                continue
+
+        # Filtro régimen diario: EMA50 vs EMA200 daily (golden/death cross)
+        if config.daily_trend_enabled:
+            if is_long_break and daily_trend < 0:
+                continue
+            if is_short_break and daily_trend > 0:
                 continue
 
         if is_long_break:

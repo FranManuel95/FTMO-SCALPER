@@ -6,7 +6,7 @@ import pandas as pd
 
 from src.core.types import Side, Signal, SignalType
 from src.features.technical.indicators import add_adx, add_atr, add_ema, add_rsi
-from src.features.trend.htf_filter import add_htf_adx, add_htf_trend, add_weekly_regime
+from src.features.trend.htf_filter import add_daily_trend, add_htf_adx, add_htf_trend, add_weekly_regime
 
 
 @dataclass
@@ -31,6 +31,8 @@ class TrendPullbackConfig:
     # Filtro macro: EMA semanal — solo operar en dirección del régimen macro
     weekly_regime_enabled: bool = False
     weekly_ema_period: int = 50
+    # Filtro de régimen diario: EMA50 vs EMA200 daily (golden/death cross)
+    daily_trend_enabled: bool = False
 
 
 def generate_pullback_signals(
@@ -57,6 +59,9 @@ def generate_pullback_signals(
     if config.weekly_regime_enabled:
         df = add_weekly_regime(df, ema_period=config.weekly_ema_period)
 
+    if config.daily_trend_enabled:
+        df = add_daily_trend(df)
+
     # Pre-extraer arrays para evitar df.iloc[i] (muy lento con muchas columnas)
     ema_f_key = f"ema_{config.ema_fast}"
     ema_t_key = f"ema_{config.ema_trend}"
@@ -73,6 +78,7 @@ def generate_pullback_signals(
     htf_arr = df["htf_trend"].values if config.htf_trend_enabled else np.zeros(len(df))
     daily_adx_arr = df[daily_adx_col].values if daily_adx_enabled else np.full(len(df), 999.0)
     weekly_regime_arr = df["weekly_regime"].values if config.weekly_regime_enabled else np.zeros(len(df))
+    daily_trend_arr = df["daily_trend"].values if config.daily_trend_enabled else np.zeros(len(df))
 
     # Horas de sesión activa en broker time
     s_start = (7 + config.tz_offset_hours) % 24
@@ -124,6 +130,14 @@ def generate_pullback_signals(
             if wr > 0 and bearish:   # régimen alcista → bloquear shorts
                 continue
             if wr < 0 and bullish:   # régimen bajista → bloquear longs
+                continue
+
+        # Filtro régimen diario: EMA50 vs EMA200 daily (golden/death cross)
+        if config.daily_trend_enabled:
+            dt = int(daily_trend_arr[i])
+            if dt > 0 and bearish:   # golden cross → solo longs
+                continue
+            if dt < 0 and bullish:   # death cross → solo shorts
                 continue
 
         # Filtro H4

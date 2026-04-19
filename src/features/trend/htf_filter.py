@@ -75,6 +75,42 @@ def add_htf_adx(
     return df
 
 
+def add_daily_trend(
+    df: pd.DataFrame,
+    ema_fast: int = 50,
+    ema_slow: int = 200,
+) -> pd.DataFrame:
+    """
+    Filtro de régimen diario: EMA50 vs EMA200 en Daily (golden/death cross).
+    Añade columna 'daily_trend': 1=alcista (EMA50 > EMA200), -1=bajista, 0=indefinido.
+
+    La señal se desplaza un día (shift=1) para evitar look-ahead: usamos el cierre
+    del día anterior para decidir si operamos hoy.
+    Warmup: ~200 velas diarias ≈ 10 meses. Con datos desde Jan-2022, válido desde ~Oct-2022.
+    """
+    ohlcv = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    daily = df.resample("1D").agg(ohlcv).dropna(subset=["close"])
+
+    if _USE_TALIB:
+        daily["d_ema_fast"] = _talib.EMA(daily["close"].values, timeperiod=ema_fast)
+        daily["d_ema_slow"] = _talib.EMA(daily["close"].values, timeperiod=ema_slow)
+    else:
+        daily["d_ema_fast"] = EMAIndicator(daily["close"], window=ema_fast, fillna=False).ema_indicator()
+        daily["d_ema_slow"] = EMAIndicator(daily["close"], window=ema_slow, fillna=False).ema_indicator()
+
+    valid = daily["d_ema_fast"].notna() & daily["d_ema_slow"].notna()
+    daily["daily_trend"] = 0
+    daily.loc[valid & (daily["d_ema_fast"] > daily["d_ema_slow"]), "daily_trend"] = 1
+    daily.loc[valid & (daily["d_ema_fast"] < daily["d_ema_slow"]), "daily_trend"] = -1
+
+    # Shift: usar cierre de ayer para hoy (evita look-ahead intradiario)
+    daily["daily_trend"] = daily["daily_trend"].shift(1).fillna(0).astype(int)
+
+    df = df.join(daily[["daily_trend"]], how="left").ffill().fillna(0)
+    df["daily_trend"] = df["daily_trend"].astype(int)
+    return df
+
+
 def add_weekly_regime(
     df: pd.DataFrame,
     ema_period: int = 50,

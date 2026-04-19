@@ -171,7 +171,7 @@ def run_validation(
                 symbol=symbol, start=start, end=end,
                 initial_balance=initial_balance, risk_pct=risk,
                 adx_min=adx_min or 25.0, rr_target=rr_target or 2.5,
-                research=True,
+                research=True, daily_trend=True,
             )
     else:
         bt_kwargs = dict(

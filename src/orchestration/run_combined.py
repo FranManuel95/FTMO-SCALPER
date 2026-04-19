@@ -48,6 +48,7 @@ def run_combined_backtest(
     tz_offset: int = 2,
     research: bool = False,
     data_dir: str | None = None,
+    daily_trend: bool = True,
 ) -> dict:
     setup_logging()
 
@@ -68,13 +69,17 @@ def run_combined_backtest(
         tz_offset_hours=tz_offset,
         rr_target=rr_target,
         htf_trend_enabled=True,
+        daily_trend_enabled=daily_trend,
     )
     pb_cfg = TrendPullbackConfig(
         tz_offset_hours=tz_offset,
         adx_min=adx_min,
         rr_target=rr_target,
         htf_trend_enabled=True,
+        daily_trend_enabled=daily_trend,
     )
+    dt_label = "DailyEMA ON" if daily_trend else "DailyEMA OFF"
+    print(f"[config] ADX>{adx_min} | RR {rr_target} | {dt_label}")
 
     bo_signals = generate_london_breakout_signals(df_15m, bo_cfg)
     pb_signals = generate_pullback_signals(df_1h, pb_cfg)
