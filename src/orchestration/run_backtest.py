@@ -74,8 +74,12 @@ def run_backtest(
             signals = result
             diag_rows = []
     elif strategy == "pullback":
-        from src.signals.pullback.trend_pullback import generate_pullback_signals
-        signals = generate_pullback_signals(df)
+        from src.signals.pullback.trend_pullback import TrendPullbackConfig, generate_pullback_signals
+        pb_cfg = TrendPullbackConfig(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        session_label = f"Session {pb_cfg.session_start_h:02d}:00-{pb_cfg.session_end_h:02d}:00" if pb_cfg.session_filter else "24/5"
+        htf_label = f"H4 trend {'ON' if htf_trend else 'OFF'}"
+        print(f"[signals] {session_label} | {htf_label}")
+        signals = generate_pullback_signals(df, pb_cfg)
         diag_rows = []
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
