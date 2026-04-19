@@ -53,6 +53,7 @@ def run_backtest(
     adx_min: float | None = None,
     rr_target: float | None = None,
     daily_adx_min: float | None = None,
+    weekly_regime: bool = False,
 ) -> dict:
     setup_logging()
 
@@ -68,9 +69,11 @@ def run_backtest(
 
     if strategy == "breakout":
         from src.signals.breakout.london_breakout import LondonBreakoutConfig, generate_london_breakout_signals
-        cfg = LondonBreakoutConfig(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        cfg = LondonBreakoutConfig(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend,
+                                   weekly_regime_enabled=weekly_regime)
         htf_label = f"H4 trend {'ON' if htf_trend else 'OFF'}"
-        print(f"[signals] Asian: {cfg.asian_start_h:02d}:00-{cfg.asian_end_h:02d}:00 | London: {cfg.london_start_h:02d}:00-{cfg.london_end_h:02d}:00 | {htf_label}")
+        weekly_label = "WeeklyEMA ON" if weekly_regime else "WeeklyEMA OFF"
+        print(f"[signals] Asian: {cfg.asian_start_h:02d}:00-{cfg.asian_end_h:02d}:00 | London: {cfg.london_start_h:02d}:00-{cfg.london_end_h:02d}:00 | {htf_label} | {weekly_label}")
         result = generate_london_breakout_signals(df, cfg, return_diagnostics=diagnostic)
         if diagnostic:
             signals, diag_rows = result
@@ -86,13 +89,16 @@ def run_backtest(
             pb_kwargs["rr_target"] = rr_target
         if daily_adx_min is not None:
             pb_kwargs["daily_adx_min"] = daily_adx_min
+        if weekly_regime:
+            pb_kwargs["weekly_regime_enabled"] = True
         pb_cfg = TrendPullbackConfig(**pb_kwargs)
         s_start = (7 + tz_offset) % 24
         s_end = (21 + tz_offset) % 24
         session_label = f"Session {s_start:02d}:00-{s_end:02d}:00" if pb_cfg.session_filter else "24/5"
         htf_label = f"H4 trend {'ON' if htf_trend else 'OFF'}"
         daily_label = f"DailyADX>{pb_cfg.daily_adx_min}" if pb_cfg.daily_adx_min > 0 else "DailyADX OFF"
-        print(f"[signals] {session_label} | {htf_label} | {daily_label} | ADX>{pb_cfg.adx_min} | RR {pb_cfg.rr_target}")
+        weekly_label = "WeeklyEMA ON" if weekly_regime else "WeeklyEMA OFF"
+        print(f"[signals] {session_label} | {htf_label} | {daily_label} | {weekly_label} | ADX>{pb_cfg.adx_min} | RR {pb_cfg.rr_target}")
         signals = generate_pullback_signals(df, pb_cfg)
         diag_rows = []
     else:
@@ -233,12 +239,13 @@ if __name__ == "__main__":
     parser.add_argument("--adx-min", type=float, default=None, help="ADX mínimo en H1 (default: 20)")
     parser.add_argument("--rr-target", type=float, default=None, help="Ratio RR objetivo (default: 2.0)")
     parser.add_argument("--daily-adx-min", type=float, default=None, help="ADX mínimo en Daily para filtro de régimen (default: OFF)")
+    parser.add_argument("--weekly-regime", action="store_true", help="Activar filtro EMA50 semanal como régimen macro")
     args = parser.parse_args()
 
     results = run_backtest(
         args.symbol, args.strategy, args.start, args.end,
         args.timeframe, args.balance, args.risk, args.data_dir,
         args.tz_offset, not args.no_htf, args.diagnostic, args.research,
-        args.adx_min, args.rr_target, args.daily_adx_min,
+        args.adx_min, args.rr_target, args.daily_adx_min, args.weekly_regime,
     )
     print(json.dumps(results, indent=2, default=str))

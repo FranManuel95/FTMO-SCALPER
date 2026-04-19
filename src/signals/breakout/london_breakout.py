@@ -6,7 +6,7 @@ import pandas as pd
 from src.core.types import Side, Signal, SignalType
 from src.features.session.asian_range import add_asian_range
 from src.features.technical.indicators import add_adx, add_atr
-from src.features.trend.htf_filter import add_htf_trend
+from src.features.trend.htf_filter import add_htf_trend, add_weekly_regime
 
 
 @dataclass
@@ -24,6 +24,9 @@ class LondonBreakoutConfig:
     htf_resample: str = "4h"
     htf_ema_fast: int = 50
     htf_ema_slow: int = 200
+    # Filtro macro semanal
+    weekly_regime_enabled: bool = False
+    weekly_ema_period: int = 50
 
     @property
     def asian_start_h(self) -> int:
@@ -84,6 +87,9 @@ def generate_london_breakout_signals(
         df = add_htf_trend(df, htf_resample=config.htf_resample,
                            ema_fast=config.htf_ema_fast, ema_slow=config.htf_ema_slow)
 
+    if config.weekly_regime_enabled:
+        df = add_weekly_regime(df, ema_period=config.weekly_ema_period)
+
     signals: list[Signal] = []
     diagnostics: list[dict] = []
     signals_today: dict[str, int] = {}
@@ -107,6 +113,7 @@ def generate_london_breakout_signals(
         asian_range = row.get("asian_range")
         adx = row.get("adx_14")
         htf_trend = int(row.get("htf_trend", 0)) if config.htf_trend_enabled else 0
+        weekly_regime = row.get("weekly_regime", 0) if config.weekly_regime_enabled else 0
         close = row["close"]
 
         if any(pd.isna(v) for v in [atr, asian_high, asian_low, asian_range, adx]):
@@ -149,6 +156,13 @@ def generate_london_breakout_signals(
             if is_short_break and htf_trend > 0:
                 if return_diagnostics:
                     diagnostics.append({"ts": ts, "reason": "htf_contra_short", "close": close, "htf_trend": htf_trend})
+                continue
+
+        # Filtro régimen semanal: solo operar en dirección del macro trend
+        if config.weekly_regime_enabled and not pd.isna(weekly_regime):
+            if is_long_break and weekly_regime < 0:
+                continue
+            if is_short_break and weekly_regime > 0:
                 continue
 
         if is_long_break:

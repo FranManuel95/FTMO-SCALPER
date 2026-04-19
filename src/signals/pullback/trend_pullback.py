@@ -6,7 +6,7 @@ import pandas as pd
 
 from src.core.types import Side, Signal, SignalType
 from src.features.technical.indicators import add_adx, add_atr, add_ema, add_rsi
-from src.features.trend.htf_filter import add_htf_adx, add_htf_trend
+from src.features.trend.htf_filter import add_htf_adx, add_htf_trend, add_weekly_regime
 
 
 @dataclass
@@ -28,6 +28,9 @@ class TrendPullbackConfig:
     # Filtro de régimen: ADX en timeframe diario
     daily_adx_min: float = 0.0   # 0 = desactivado; ej: 20.0 activa el filtro
     daily_adx_length: int = 14
+    # Filtro macro: EMA semanal — solo operar en dirección del régimen macro
+    weekly_regime_enabled: bool = False
+    weekly_ema_period: int = 50
 
 
 def generate_pullback_signals(
@@ -51,6 +54,9 @@ def generate_pullback_signals(
     if daily_adx_enabled:
         df = add_htf_adx(df, htf_resample="1D", adx_length=config.daily_adx_length)
 
+    if config.weekly_regime_enabled:
+        df = add_weekly_regime(df, ema_period=config.weekly_ema_period)
+
     # Pre-extraer arrays para evitar df.iloc[i] (muy lento con muchas columnas)
     ema_f_key = f"ema_{config.ema_fast}"
     ema_t_key = f"ema_{config.ema_trend}"
@@ -66,6 +72,7 @@ def generate_pullback_signals(
     rsi_arr = df["rsi_14"].values
     htf_arr = df["htf_trend"].values if config.htf_trend_enabled else np.zeros(len(df))
     daily_adx_arr = df[daily_adx_col].values if daily_adx_enabled else np.full(len(df), 999.0)
+    weekly_regime_arr = df["weekly_regime"].values if config.weekly_regime_enabled else np.zeros(len(df))
 
     # Horas de sesión activa en broker time
     s_start = (7 + config.tz_offset_hours) % 24
@@ -110,6 +117,14 @@ def generate_pullback_signals(
 
         bullish = close > ema_t[i] and ema_f[i] > ema_t[i]
         bearish = close < ema_t[i] and ema_f[i] < ema_t[i]
+
+        # Filtro régimen semanal: solo operar en dirección del macro trend
+        if config.weekly_regime_enabled and not np.isnan(weekly_regime_arr[i]):
+            wr = weekly_regime_arr[i]
+            if wr > 0 and bearish:   # régimen alcista → bloquear shorts
+                continue
+            if wr < 0 and bullish:   # régimen bajista → bloquear longs
+                continue
 
         # Filtro H4
         if config.htf_trend_enabled:

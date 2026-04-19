@@ -73,3 +73,35 @@ def add_htf_adx(
 
     df = df.join(htf[[col]], how="left").ffill()
     return df
+
+
+def add_weekly_regime(
+    df: pd.DataFrame,
+    ema_period: int = 50,
+) -> pd.DataFrame:
+    """
+    Filtro de régimen macro: close semanal vs EMA50 semanal.
+    Añade columna 'weekly_regime': 1=alcista (close > EMA50 weekly), -1=bajista, 0=neutral.
+
+    Permite bloquear trades en contra del macro trend — p.ej. no abrir longs
+    en XAUUSD cuando el precio está por debajo de la EMA50 semanal.
+    """
+    ohlcv = {"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}
+    weekly = df.resample("1W").agg(ohlcv).dropna(subset=["close"])
+
+    col = f"weekly_ema_{ema_period}"
+    if _USE_TALIB:
+        weekly[col] = _talib.EMA(weekly["close"].values, timeperiod=ema_period)
+    else:
+        weekly[col] = EMAIndicator(weekly["close"], window=ema_period, fillna=False).ema_indicator()
+
+    def _regime(row):
+        ema = row[col]
+        if pd.isna(ema):
+            return 0
+        return 1 if row["close"] > ema else -1
+
+    weekly["weekly_regime"] = weekly.apply(_regime, axis=1)
+
+    df = df.join(weekly[["weekly_regime"]], how="left").ffill()
+    return df
