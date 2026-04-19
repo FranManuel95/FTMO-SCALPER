@@ -54,7 +54,7 @@ def _parse_mt5_csv(path: Path) -> pd.DataFrame:
 
     sep = "\t" if "\t" in first_line else ","
 
-    df = pd.read_csv(path, sep=sep, encoding="utf-8", errors="replace")
+    df = pd.read_csv(path, sep=sep, encoding="utf-8", encoding_errors="replace")
 
     # Normalizar nombres de columnas: quitar <>, bajar a minúsculas
     df.columns = [c.strip().strip("<>").lower() for c in df.columns]
