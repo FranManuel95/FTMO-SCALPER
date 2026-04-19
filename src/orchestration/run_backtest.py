@@ -188,6 +188,7 @@ def run_backtest(
         "total_trades": len([t for t in trades if t.exit_time is not None]),
         "performance": summary(trades, initial_balance),
         "ftmo_checks": run_all_checks(trades, initial_balance),
+        "trade_pnls": [round(t["pnl"], 4) for t in trade_log],
     }
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
