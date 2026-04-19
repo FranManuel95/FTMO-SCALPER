@@ -50,6 +50,8 @@ def run_backtest(
     htf_trend: bool = True,
     diagnostic: bool = False,
     research: bool = False,
+    adx_min: float | None = None,
+    rr_target: float | None = None,
 ) -> dict:
     setup_logging()
 
@@ -76,12 +78,17 @@ def run_backtest(
             diag_rows = []
     elif strategy == "pullback":
         from src.signals.pullback.trend_pullback import TrendPullbackConfig, generate_pullback_signals
-        pb_cfg = TrendPullbackConfig(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        pb_kwargs = dict(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        if adx_min is not None:
+            pb_kwargs["adx_min"] = adx_min
+        if rr_target is not None:
+            pb_kwargs["rr_target"] = rr_target
+        pb_cfg = TrendPullbackConfig(**pb_kwargs)
         s_start = (7 + tz_offset) % 24
         s_end = (21 + tz_offset) % 24
         session_label = f"Session {s_start:02d}:00-{s_end:02d}:00" if pb_cfg.session_filter else "24/5"
         htf_label = f"H4 trend {'ON' if htf_trend else 'OFF'}"
-        print(f"[signals] {session_label} | {htf_label}")
+        print(f"[signals] {session_label} | {htf_label} | ADX>{pb_cfg.adx_min} | RR {pb_cfg.rr_target}")
         signals = generate_pullback_signals(df, pb_cfg)
         diag_rows = []
     else:
@@ -219,11 +226,14 @@ if __name__ == "__main__":
     parser.add_argument("--no-htf", action="store_true", help="Desactivar filtro de tendencia H4")
     parser.add_argument("--diagnostic", action="store_true", help="Guardar CSV con motivo de cada señal rechazada")
     parser.add_argument("--research", action="store_true", help="Desactivar guards para ver performance completa del año")
+    parser.add_argument("--adx-min", type=float, default=None, help="ADX mínimo (default: 20)")
+    parser.add_argument("--rr-target", type=float, default=None, help="Ratio RR objetivo (default: 2.0)")
     args = parser.parse_args()
 
     results = run_backtest(
         args.symbol, args.strategy, args.start, args.end,
         args.timeframe, args.balance, args.risk, args.data_dir,
         args.tz_offset, not args.no_htf, args.diagnostic, args.research,
+        args.adx_min, args.rr_target,
     )
     print(json.dumps(results, indent=2, default=str))
