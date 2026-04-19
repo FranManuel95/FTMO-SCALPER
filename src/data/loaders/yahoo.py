@@ -1,7 +1,6 @@
 from datetime import datetime
 
 import pandas as pd
-import yfinance as yf
 
 from src.data.loaders.base import BaseLoader
 
@@ -23,6 +22,10 @@ TIMEFRAME_MAP = {
 
 class YahooLoader(BaseLoader):
     def load(self, symbol: str, start: datetime, end: datetime, timeframe: str = "1h") -> pd.DataFrame:
+        try:
+            import yfinance as yf
+        except ImportError:
+            raise ImportError("yfinance not installed. Use local MT5 CSV data or install yfinance.")
         ticker = SYMBOL_MAP.get(symbol.upper(), symbol)
         interval = TIMEFRAME_MAP.get(timeframe, timeframe)
 

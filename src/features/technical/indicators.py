@@ -1,50 +1,45 @@
+import numpy as np
 import pandas as pd
-from ta.trend import ADXIndicator, EMAIndicator, MACD
-from ta.momentum import RSIIndicator
-from ta.volatility import AverageTrueRange, BollingerBands
+import talib
 
 
 def add_atr(df: pd.DataFrame, length: int = 14) -> pd.DataFrame:
-    atr = AverageTrueRange(df["high"], df["low"], df["close"], window=length, fillna=False)
-    df[f"atr_{length}"] = atr.average_true_range()
+    df[f"atr_{length}"] = talib.ATR(df["high"].values, df["low"].values, df["close"].values, timeperiod=length)
     return df
 
 
 def add_adx(df: pd.DataFrame, length: int = 14) -> pd.DataFrame:
-    adx = ADXIndicator(df["high"], df["low"], df["close"], window=length, fillna=False)
-    df[f"adx_{length}"] = adx.adx()
-    df[f"dmp_{length}"] = adx.adx_pos()
-    df[f"dmn_{length}"] = adx.adx_neg()
+    df[f"adx_{length}"] = talib.ADX(df["high"].values, df["low"].values, df["close"].values, timeperiod=length)
+    df[f"dmp_{length}"] = talib.PLUS_DI(df["high"].values, df["low"].values, df["close"].values, timeperiod=length)
+    df[f"dmn_{length}"] = talib.MINUS_DI(df["high"].values, df["low"].values, df["close"].values, timeperiod=length)
     return df
 
 
 def add_ema(df: pd.DataFrame, lengths: list[int] = [20, 50, 200]) -> pd.DataFrame:
     for length in lengths:
-        ema = EMAIndicator(df["close"], window=length, fillna=False)
-        df[f"ema_{length}"] = ema.ema_indicator()
+        df[f"ema_{length}"] = talib.EMA(df["close"].values, timeperiod=length)
     return df
 
 
 def add_rsi(df: pd.DataFrame, length: int = 14) -> pd.DataFrame:
-    rsi = RSIIndicator(df["close"], window=length, fillna=False)
-    df[f"rsi_{length}"] = rsi.rsi()
+    df[f"rsi_{length}"] = talib.RSI(df["close"].values, timeperiod=length)
     return df
 
 
 def add_macd(df: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> pd.DataFrame:
-    macd = MACD(df["close"], window_fast=fast, window_slow=slow, window_sign=signal, fillna=False)
-    df["macd"] = macd.macd()
-    df["macd_signal"] = macd.macd_signal()
-    df["macd_hist"] = macd.macd_diff()
+    macd, macd_signal, macd_hist = talib.MACD(df["close"].values, fastperiod=fast, slowperiod=slow, signalperiod=signal)
+    df["macd"] = macd
+    df["macd_signal"] = macd_signal
+    df["macd_hist"] = macd_hist
     return df
 
 
 def add_bollinger(df: pd.DataFrame, length: int = 20, std: float = 2.0) -> pd.DataFrame:
-    bb = BollingerBands(df["close"], window=length, window_dev=std, fillna=False)
-    df["bb_upper"] = bb.bollinger_hband()
-    df["bb_mid"] = bb.bollinger_mavg()
-    df["bb_lower"] = bb.bollinger_lband()
-    df["bb_width"] = bb.bollinger_wband()
+    upper, mid, lower = talib.BBANDS(df["close"].values, timeperiod=length, nbdevup=std, nbdevdn=std)
+    df["bb_upper"] = upper
+    df["bb_mid"] = mid
+    df["bb_lower"] = lower
+    df["bb_width"] = (upper - lower) / mid
     return df
 
 
