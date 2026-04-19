@@ -6,7 +6,7 @@ import pandas as pd
 
 from src.core.types import Side, Signal, SignalType
 from src.features.technical.indicators import add_adx, add_atr, add_ema, add_rsi
-from src.features.trend.htf_filter import add_htf_trend
+from src.features.trend.htf_filter import add_htf_adx, add_htf_trend
 
 
 @dataclass
@@ -25,6 +25,9 @@ class TrendPullbackConfig:
     htf_resample: str = "4h"
     htf_ema_fast: int = 50
     htf_ema_slow: int = 200
+    # Filtro de régimen: ADX en timeframe diario
+    daily_adx_min: float = 0.0   # 0 = desactivado; ej: 20.0 activa el filtro
+    daily_adx_length: int = 14
 
 
 def generate_pullback_signals(
@@ -44,9 +47,14 @@ def generate_pullback_signals(
         df = add_htf_trend(df, htf_resample=config.htf_resample,
                            ema_fast=config.htf_ema_fast, ema_slow=config.htf_ema_slow)
 
+    daily_adx_enabled = config.daily_adx_min > 0
+    if daily_adx_enabled:
+        df = add_htf_adx(df, htf_resample="1D", adx_length=config.daily_adx_length)
+
     # Pre-extraer arrays para evitar df.iloc[i] (muy lento con muchas columnas)
     ema_f_key = f"ema_{config.ema_fast}"
     ema_t_key = f"ema_{config.ema_trend}"
+    daily_adx_col = f"htf_adx_{config.daily_adx_length}"
 
     timestamps = df.index.to_pydatetime()
     hours = df.index.hour
@@ -57,6 +65,7 @@ def generate_pullback_signals(
     atr_arr = df["atr_14"].values
     rsi_arr = df["rsi_14"].values
     htf_arr = df["htf_trend"].values if config.htf_trend_enabled else np.zeros(len(df))
+    daily_adx_arr = df[daily_adx_col].values if daily_adx_enabled else np.full(len(df), 999.0)
 
     # Horas de sesión activa en broker time
     s_start = (7 + config.tz_offset_hours) % 24
@@ -89,6 +98,10 @@ def generate_pullback_signals(
             continue
 
         if adx_arr[i] < config.adx_min:
+            continue
+
+        # Filtro régimen diario
+        if daily_adx_enabled and (np.isnan(daily_adx_arr[i]) or daily_adx_arr[i] < config.daily_adx_min):
             continue
 
         close = close_arr[i]
