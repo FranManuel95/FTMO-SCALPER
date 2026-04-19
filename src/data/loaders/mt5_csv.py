@@ -122,9 +122,9 @@ class MT5CsvLoader(BaseLoader):
 
         df = _parse_mt5_csv(path)
 
-        # Filtrar por rango de fechas
-        start_ts = pd.Timestamp(start, tz="UTC")
-        end_ts = pd.Timestamp(end, tz="UTC")
+        # Filtrar por rango de fechas — start/end pueden llegar ya tz-aware
+        start_ts = pd.Timestamp(start).tz_localize("UTC") if pd.Timestamp(start).tzinfo is None else pd.Timestamp(start).tz_convert("UTC")
+        end_ts = pd.Timestamp(end).tz_localize("UTC") if pd.Timestamp(end).tzinfo is None else pd.Timestamp(end).tz_convert("UTC")
         df = df[(df.index >= start_ts) & (df.index < end_ts)]
 
         return self.validate(df)
