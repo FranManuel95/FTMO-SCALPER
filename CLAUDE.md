@@ -113,13 +113,14 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **FTMO viability:** Safe only at 0.3% risk (at 0.4% risk P(ruin)=7.6% — too high). Edge delgado, driver macro (JPY divergencia BoJ/Fed) puede agotarse.
 - **Logic:** Same EMA20 pullback as XAUUSD but ADX threshold lowered to 20 (JPY crosses have lower ADX naturally). Both LONG and SHORT signals generated.
 
-### ✅ NY Open Breakout — CONDITIONAL (`src/signals/breakout/ny_open_breakout.py`)
+### ✅ NY Open Breakout — VALIDADA (`src/signals/breakout/ny_open_breakout.py`)
 
 - **Asset/TF:** XAUUSD 15m
 - **Logic:** Build range from NY open first hour (13:00-14:00 UTC = 15:00-16:00 broker). Breakout of range in H4 trend direction. ADX > 18.
-- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`
-- **Walk-forward (2022–2026, 6 windows):** 5/6 OOS profitable, avg OOS PF 1.345, P(ruin) 1.8%, Max DD p95 8.6%
-- **FTMO viability:** Safe only at 0.25% risk (at 0.4% risk P(ruin)=22%). Edge is XAUUSD-specific — CME gold futures open creates directional momentum. All 4 years (2022-2025) profitable on IS.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.5`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **4.205**, P(ruin) **0.0%**, Max DD p95 **0.6%**
+- **FTMO viability:** Safe at 0.25% risk. ~8-10 trades/month. PnL median ~€267/mes en €10k. Trail 0.5×ATR es clave — captura impulso inicial del CME open aunque el breakout falle.
+- **Fixed TP baseline:** OOS 5/6, PF 1.345, DD p95 8.6% — el trail lo transforma completamente.
 - **RR=4.0 tested but rejected:** OOS PF 1.368 (+marginal) but P(ruin) spikes to 9.4%, Max DD p95=11.5% (>FTMO limit). Keep RR=2.5.
 - **NY ORB on other pairs:** No edge. EURUSD, USDJPY, GBPUSD, GBPJPY, EURJPY all inconsistent year-by-year. XAUUSD-only strategy.
 
@@ -169,7 +170,7 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **EURGBP mean reversion:** FAIL — régimen-dependiente: 2021-2022 PF>1.5, 2023 PF=0.829, 2024 PF=1.53, 2025 PF=1.03. Sin consistencia inter-año.
 - **XAUUSD mean reversion 1H:** FAIL — no es complementaria al pullback. Falla en 2022 (gold cayendo por hikes Fed) al igual que el pullback. LONG-only tampoco ayuda: 2022 PF=0.696.
 - **London Breakout 15M:** FAIL Gate 1 con IS 2022-2025 (PF 0.97, DD 12.8%). Solo funciona en bull run (2024), mismo régimen que pullback.
-- **NY Open ORB 15M:** Edge real pero delgado. XAUUSD-específico (CME futures open). WF 5/6 OOS, avg PF 1.345. Safe solo a 0.25% riesgo. RR=4.0 testado y rechazado (P(ruin)=9.4%).
+- **NY Open ORB 15M con trail 0.5×ATR:** WF 6/6 OOS, avg PF 4.205, Max DD p95 0.6%, P(ruin) 0.0%. El trail captura el impulso inicial del CME open — incluso breakouts fallidos dan pequeñas ganancias. Fixed TP baseline (1.345) era delgado; trail lo transforma en edge sólido. RR=4.0 testado y rechazado (P(ruin)=9.4%).
 - **Trailing stop 0.5×ATR (pullback XAUUSD 1H):** MEJOR que fixed TP. OOS PF 2.882 vs 1.905, Max DD p95 1.6% vs 7.0%, P(ruin) 0.0% vs 0.5%. La clave: en mercados laterales (2023), el trail agresivo convierte pérdidas en pequeñas ganancias. La lógica: `trail_sl = bar["high"] - atr * 0.5`. Implementado en `run_backtest.py` exit_mode="trail".
 - **Partial TP (50% a 1.5R) resultó PEOR:** Recorta ganadores antes de tiempo. El precio que llega a 1.5R tiende a continuar a 2.5R. Fixed o trail son mejores que partial.
 - **Data timezone:** CSVs en backtest/data/ usan UTC+2 (hora broker MT5). El sistema usa tz_offset_hours=2 para ser consistente. Nunca mezclar con CSVs UTC-naive de data/raw/.
