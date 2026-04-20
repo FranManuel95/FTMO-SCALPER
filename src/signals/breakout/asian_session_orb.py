@@ -172,11 +172,19 @@ def generate_asian_session_orb_signals(
         atr   = row.get("atr_14")
         adx   = row.get("adx_14")
         close = row["close"]
-        htf   = int(row.get("htf_trend", 0)) if config.htf_trend_enabled else 0
-        dt    = int(row.get("daily_trend", 0)) if config.daily_trend_enabled else 0
+        htf_raw = row.get("htf_trend", 0) if config.htf_trend_enabled else 0
+        dt_raw  = row.get("daily_trend", 0) if config.daily_trend_enabled else 0
 
-        if any(_pd.isna(v) for v in [atr, adx, close]):
+        nan_check = [atr, adx, close]
+        if config.htf_trend_enabled:
+            nan_check.append(htf_raw)
+        if config.daily_trend_enabled:
+            nan_check.append(dt_raw)
+        if any(_pd.isna(v) for v in nan_check):
             continue
+
+        htf = int(htf_raw)
+        dt  = int(dt_raw)
 
         # ── Filters ──
         if adx < config.adx_min:
