@@ -17,6 +17,10 @@ import argparse
 import logging
 import sys
 
+from dotenv import load_dotenv
+
+load_dotenv()  # carga .env antes de leer os.environ
+
 from src.core.logging import setup_logging
 from src.features.technical.indicators import add_adx, add_atr
 from src.features.trend.htf_filter import add_htf_trend
