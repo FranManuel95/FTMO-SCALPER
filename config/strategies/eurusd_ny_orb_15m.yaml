@@ -1,0 +1,43 @@
+name: EURUSD NY Open ORB 15M + Trail
+symbol: EURUSD
+strategy: ny_orb
+timeframe: 15m
+hypothesis: >
+  Rango NY Open primera hora 13:00-14:00 UTC en EURUSD 15M. Breakout de rango
+  en direccion H4 trend, ADX>18, trail 0.5xATR. La apertura NY coincide con
+  el solapamiento Londres-Nueva York — maximo volumen del dia en EURUSD. CME
+  futures abren en esta ventana generando impulso institucional. Mas debil que
+  London ORB porque EURUSD ya tiene el movimiento europeo descontado a las 13:00.
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.002
+  exit_mode: trail
+  trail_atr_mult: 0.5
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: >
+  CONDITIONAL PASS. OOS 6/6 | PF medio OOS 2.745 | WFE 1.321 | P(ruin) 0.0% |
+  Max DD p95 0.6% | PnL median $898/6m en $10k.
+  W1 (PF 1.139) y W6 (PF 1.589) thin — WFE falla en 2/6 ventanas.
+  Mas debil que London ORB (PF 3.978 vs 2.745). Si se combina con London ORB
+  en mismo par, reducir ambas a risk=0.2% para mantener exposicion EURUSD controlada.
+  Documentado — decision live a evaluar segun capacidad de riesgo total portfolio.
+notes: >
+  IS 2023-2025: PF 2.691, WR 53.6%, 332 trades, DD 0.35%, 20/24 meses profitable.
+  WF 2022-2026: OOS 6/6, avg PF 2.745, WFE 1.321 (W1 y W6 WFE fail).
+  Monte Carlo 526 OOS trades: PnL median $898/6m, DD p95 0.6%, P(profit) 100%.
+  Mas conservador: risk=0.002 (vs 0.0025 London ORB) por edge mas fino.
+  No combinar ambas EURUSD ORBs sin reducir riesgo — correlacion de instrumento.

@@ -1,0 +1,46 @@
+name: EURUSD London Open ORB 15M + Trail
+symbol: EURUSD
+strategy: london_orb
+timeframe: 15m
+hypothesis: >
+  Rango London Open 07:00-08:00 UTC en EURUSD 15M. Breakout de rango en
+  direccion H4 trend, ADX>18, trail 0.5xATR. EURUSD es el par mas liquido
+  del mundo — el London open concentra el mayor volumen institucional del dia.
+  El breakout captura el impulso inicial de la sesion europea antes de la
+  consolidacion NY. Trail 0.5xATR permite ride del impulso completo evitando
+  salidas prematuras en retesteos del rango.
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.5
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: >
+  PASS — ROBUSTA. OOS 6/6 | PF medio OOS 3.978 | WFE 1.287 | P(ruin) 0.0% |
+  Max DD p95 0.6% | PnL median $1,442/6m en $10k | ~14-16 trades/mes.
+  Trail=0.5 sweet spot: margen 2.4 pips vs spread EURUSD 0.5-1.0 pip (ratio 2.4-4.8x).
+  Trail=0.3 da PF 9.4 OOS pero margen 1.4 pips — demasiado ajustado en noticias.
+  EURUSD es el par mas liquido — execution risk minima. Diversifica genuinamente
+  del portfolio XAUUSD/USDJPY. W2 (H2 2023) WFE baja en todos los trails —
+  periodo ranging EUR/USD pero aun profitable (PF 1.8-3.5).
+notes: >
+  IS 2023-2025: PF 3.323, WR 57.8%, 348 trades, DD 0.0%, 22/24 meses profitable.
+  WF 2022-2026: OOS 6/6, avg PF 3.978, WFE 1.287.
+  Trail sweep: 0.3 (PF 9.372, margen 1.4 pip — too tight) > 0.4 (PF 5.854, 1.9 pip) > 0.5 (PF 3.978, 2.4 pip — SWEET SPOT).
+  Monte Carlo 549 OOS trades: PnL median $1,442/6m, DD p95 0.6%, P(profit) 100%.
+  Comparable XAUUSD London ORB (PF 2.907 OOS) — EURUSD supera con menos riesgo de slippage.
+  ~86-98 trades por ventana OOS — estadisticamente mas robusto que estrategias de baja frecuencia.

@@ -181,6 +181,34 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.817**, P(ruin) **0.0%**, Max DD p95 **1.9%**
 - **FTMO viability:** ~€180/mes en €10k. Driver macro: BoE vs Fed.
 
+### ✅ EURUSD London Open ORB 15M + Trail — VALIDADA (`src/signals/breakout/london_open_breakout.py`)
+
+- **Asset/TF:** EURUSD 15m
+- **Logic:** Rango London Open 07:00-08:00 UTC. Breakout entry 08:00-12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.5×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.5`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **3.978**, P(ruin) **0.0%**, Max DD p95 **0.6%**, WFE **1.287**
+- **Trail sweep:** 0.3 da PF 9.372 pero margen 1.4 pips ≈ spread en noticias — inviable. 0.5 sweet spot con 2.4 pips de margen (ratio 2.4-4.8× vs spread EURUSD 0.5-1.0 pip).
+- **FTMO viability:** ~$1,442/6m en $10k. ~14-16 trades/mes — mayor frecuencia que pullbacks. EURUSD es el par más líquido — ejecución limpia. Diversifica genuinamente del portfolio XAUUSD.
+
+### ✅ EURGBP Pullback 1H + Trail — CONDITIONAL PASS (`src/signals/pullback/trend_pullback.py`)
+
+- **Asset/TF:** EURGBP 1h
+- **Logic:** EMA20 pullback, ADX > 25, H4 trend. Trail 0.3×ATR.
+- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.3`
+- **Walk-forward (2022–2026, 6 windows):** **5/6 OOS profitable**, avg OOS PF **4.398**, P(ruin) **0.0%**, Max DD p95 **1.1%**, WFE **3.171**
+- **W3 failure:** H1 2024 — convergencia BoE/ECB elimina driver direccional. Mismo riesgo macro que la mean reversion EURGBP que falló. Trail=0.3 (margen 12-18 pips vs spread 1-2 pips, ratio 6-18×).
+- **Status:** Documentado, no en live runner — añadir si se quiere aumentar diversificación con monitoreo BoE/ECB.
+
+### ✅ USDCHF Pullback 1H + Trail — CONDITIONAL PASS (`src/signals/pullback/trend_pullback.py`)
+
+- **Asset/TF:** USDCHF 1h
+- **Logic:** EMA20 pullback, ADX > 25, H4 trend. Trail 0.3×ATR. Driver: Fed vs SNB.
+- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.004`, `exit_mode=trail`, `trail_atr_mult=0.3`
+- **Walk-forward (2022–2026, 6 windows):** **5/6 OOS profitable**, avg OOS PF **2.669**, P(ruin) **0.0%**, Max DD p95 **2.0%**, WFE **1.143**
+- **W6 failure:** H2 2025 — USD weakness post-tarifas, CHF safe-haven appreciation. Trail=0.3 margen 4.2 pips vs spread 1.5-2 pips (ratio 2.1-2.8×, mínimo aceptable).
+- **SNB risk:** Intervenciones sorpresa (2015 unpeg, 2022-2023) pueden crear gaps de 300+ pips — trailing stop 1H no protege. Requiere monitoreo humano.
+- **Status:** Documentado, no en live runner inicial — diversificador válido si se acepta el riesgo SNB.
+
 ### ❌ London Breakout (`src/signals/breakout/london_breakout.py`)
 
 - **Asset/TF:** XAUUSD 15m
@@ -222,7 +250,10 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD is not a trending instrument in the same way as XAUUSD.
 - **EURUSD mean reversion:** Régimen-dependiente. Con datos correctos (UTC+2): 2022 PF 0.67, 2023 PF 1.01, 2024 PF 1.80, 2025 PF 0.19. Sin consistencia entre años. El buen resultado de 2023 previo (PF 4.6) era un artefacto del CSV UTC mal interpretado como UTC+2.
 - **XAUUSD mean reversion:** WR ~27% en todos los años. No complementario al pullback — fallan juntos.
-- **Multi-par scan completo (pullback):** USDJPY CONDITIONAL (validado a 0.3% riesgo). EURJPY FAIL Gate 1 (PF 1.004). GBPJPY FAIL Gate 2 (OOS PF 0.990 — BoJ hikes revirtieron el trade). AUDUSD FAIL (avg PF ~0.88, sin driver direccional). USDCAD FAIL (avg PF ~0.91, fuerzas USD+CAD se cancelan). El edge EMA pullback es específico de pares con driver macro unidireccional fuerte.
+- **Multi-par scan completo (pullback):** USDJPY CONDITIONAL (validado a 0.3% riesgo). EURJPY con trail=0.3 da OOS 5/6 PF 4.747 pero IS PF=1.073 falla Gate 1 y trade counts muy bajos (9-26/ventana) — documentado, no en live. GBPJPY con trail FAIL 4/6 (W5 más reciente PF 0.682, BoJ gap risk descarta para live). AUDUSD FAIL (avg PF ~0.88). USDCAD FAIL Gate 1 con trail (IS PF=1.14). EURGBP CONDITIONAL PASS 5/6 PF 4.398 — documentado. USDCHF CONDITIONAL PASS 5/6 PF 2.669 — documentado. El edge EMA pullback requiere driver macro unidireccional fuerte.
+- **EURUSD London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 3.978, DD p95 0.6%, WFE 1.287, trail=0.5 (margen 2.4 pips vs spread 0.5-1.0 pip). Supera XAUUSD London ORB (PF 2.907). ~14-16 trades/mes, alta frecuencia. Trail=0.3 da PF 9.4 teórico pero margen 1.4 pips demasiado ajustado en días de noticias. AÑADIDA AL LIVE RUNNER.
+- **EURUSD NY Open ORB 15M CONDITIONAL:** 6/6 OOS, PF 2.745, DD p95 0.6%, pero W1 (PF 1.139) y W6 (PF 1.589) thin. Más débil que London ORB — EURUSD tiene el movimiento europeo ya descontado a las 13:00 UTC. Documentado, no en live runner inicial.
+- **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD is not a trending instrument in the same way as XAUUSD.
 - **XAUUSD 15M pullback:** FAIL — misma dependencia de régimen que 1H (2023 PF ~0.90 arrastra IS a ~1.06). Más señales no compensan la misma exposición al régimen.
 - **EURGBP mean reversion:** FAIL — régimen-dependiente: 2021-2022 PF>1.5, 2023 PF=0.829, 2024 PF=1.53, 2025 PF=1.03. Sin consistencia inter-año.
 - **XAUUSD mean reversion 1H:** FAIL — no es complementaria al pullback. Falla en 2022 (gold cayendo por hikes Fed) al igual que el pullback. LONG-only tampoco ayuda: 2022 PF=0.696.

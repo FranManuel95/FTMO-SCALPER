@@ -102,6 +102,16 @@ def build_nzdusd_pullback_1h():
     return gen
 
 
+def build_eurusd_london_orb_15m():
+    from src.signals.breakout.london_open_breakout import (
+        LondonOpenBreakoutConfig, generate_london_open_breakout_signals,
+    )
+    cfg = LondonOpenBreakoutConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_london_open_breakout_signals(df, cfg)
+    return gen
+
+
 # FVG XAUUSD — validada pero no activa en live por concentración en XAUUSD.
 # Descomentar cuando se quiera añadir al portfolio.
 # def build_xauusd_fvg_1h():
@@ -113,11 +123,12 @@ def build_nzdusd_pullback_1h():
 
 
 def build_default_portfolio() -> list[StrategyConfig]:
-    """7 estrategias validadas con sus parámetros óptimos.
+    """8 estrategias validadas con sus parámetros óptimos.
 
     FVG XAUUSD validada pero excluida — 4ª estrategia en XAUUSD aumenta
     correlación de pérdidas en regímenes laterales. Descomentar build_xauusd_fvg_1h()
     arriba y añadir aquí cuando se quiera activar.
+    EURUSD London ORB añadida: 6/6 OOS, PF 3.978, DD p95 0.6% — diversificador real.
     """
     return [
         StrategyConfig(
@@ -161,6 +172,12 @@ def build_default_portfolio() -> list[StrategyConfig]:
             symbol="NZDUSD", timeframe="1h",
             risk_pct=0.003, trail_atr_mult=0.4,      # ADX=22 sweet spot sweep
             generator=build_nzdusd_pullback_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="eurusd_london_orb_15m",
+            symbol="EURUSD", timeframe="15m",
+            risk_pct=0.0025, trail_atr_mult=0.5,     # 6/6 OOS, PF 3.978, DD p95 0.6%
+            generator=build_eurusd_london_orb_15m(),
         ),
     ]
 

@@ -2,7 +2,7 @@
 
 Sistema de trading automático para cuentas de fondeo FTMO. Incluye investigación, backtesting, validación walk-forward y ejecución live en MetaTrader 5.
 
-## Estrategias validadas (walk-forward 6/6 OOS)
+## Estrategias en live (portfolio activo)
 
 | Estrategia | Par / TF | OOS PF | DD p95 | Risk/trade |
 |---|---|---|---|---|
@@ -13,8 +13,17 @@ Sistema de trading automático para cuentas de fondeo FTMO. Incluye investigaci�
 | London Open ORB | XAUUSD 15M | 2.91 | 0.5% | 0.25% |
 | Asian Session ORB | USDJPY 1H | **24.89** | 0.5% | 0.3% |
 | Trend Pullback | NZDUSD 1H | 2.40 | 1.5% | 0.3% |
-| Trend Pullback (L) | AUDUSD 1H | 5.76 | 0.2% | 0.3% |
-| Fair Value Gap | XAUUSD 1H | 1.57 | 3.2% | 0.2% |
+| London Open ORB | EURUSD 15M | 3.98 | 0.6% | 0.25% |
+
+## Estrategias validadas (documentadas, no en live)
+
+| Estrategia | Par / TF | OOS PF | DD p95 | Estado | Motivo exclusión |
+|---|---|---|---|---|---|
+| Trend Pullback | EURGBP 1H | 4.40 | 1.1% | CONDITIONAL | BoE/ECB convergencia riesgo |
+| Trend Pullback | USDCHF 1H | 2.67 | 2.0% | CONDITIONAL | SNB intervention risk |
+| Trend Pullback (L) | AUDUSD 1H | 5.76 | 0.2% | CONDITIONAL | Solo 7-8 trades/6m |
+| Fair Value Gap | XAUUSD 1H | 1.57 | 3.2% | CONDITIONAL | Concentración XAUUSD |
+| NY Open ORB | EURUSD 15M | 2.75 | 0.6% | CONDITIONAL | Edge más fino que London |
 
 Todas usan trailing stop ATR. Validadas con IS=12m / OOS=6m, periodo 2022–2026.
 
