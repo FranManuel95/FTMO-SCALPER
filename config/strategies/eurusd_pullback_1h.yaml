@@ -1,0 +1,32 @@
+name: "EURUSD Pullback 1h"
+symbol: EURUSD
+strategy: pullback
+timeframe: 1h
+
+hypothesis: >
+  Si el pullback en tendencia funciona en XAUUSD, debería manifestarse también en
+  EURUSD H1 — mismo setup de EMA20/50 + ADX. Validar si el edge es del tipo de
+  estrategia o específico del activo (oro tiene sesgo alcista secular).
+
+params:
+  adx_min: 25
+  rr_target: 2.5
+  risk_pct: 0.004
+
+periods:
+  is_start: "2022-01-01"
+  is_end: "2024-01-01"
+  oos_start: "2024-01-01"
+  oos_end: "2025-01-01"
+  wf_start: "2022-01-01"
+  wf_end: "2025-01-01"
+
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.10
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+
+status: idea
+verdict: ""

@@ -18,6 +18,12 @@ pytest
 # Run a single test file
 pytest tests/unit/test_metrics.py -v
 
+# ── RESEARCH LOOP (flujo principal para nueva estrategia) ──
+# 1. Crear spec YAML en config/strategies/
+# 2. Correr el pipeline automatizado:
+python -m src.orchestration.run_research_loop --spec config/strategies/eurusd_pullback_1h.yaml
+# El pipeline corre IS → OOS → Walk-Forward automáticamente y genera reporte en reports/
+
 # Lint
 ruff check src/
 
@@ -143,6 +149,20 @@ In `--research` mode both guards are disabled so the full period's performance i
 ## Reports
 
 All backtest outputs go to `reports/strategy_reports/`. JSON contains full metrics + `trade_pnls` list. CSV contains the trade log. Walk-forward validation saves `{SYMBOL}_{STRATEGY}_{TF}_validation.json` with per-window results, WFE, Monte Carlo, and verdict.
+
+## Research Loop Automatizado
+
+El flujo estándar para cualquier estrategia nueva es:
+
+1. **Crear spec** en `config/strategies/{nombre}.yaml` — define símbolo, parámetros, períodos y gates de aceptación
+2. **Correr el pipeline**: `python -m src.orchestration.run_research_loop --spec config/strategies/{nombre}.yaml`
+3. El pipeline aplica automáticamente la lógica de las skills:
+   - **Gate 1 IS**: `review_backtest_results` — red flags, PF, DD, trades mínimos
+   - **Gate 2 OOS**: `compare_experiments` — degradación IS→OOS, estabilidad
+   - **Gate 3 WF**: walk-forward + Monte Carlo — robustez temporal, P(ruin)
+4. Si pasa los 3 gates → reporte markdown en `reports/strategy_reports/` + spec YAML actualizado con veredicto
+
+**Para proponer una nueva estrategia sin saber trading**: describe la idea en lenguaje informal → yo genero la spec YAML y la corro. Tú solo apruebas o ajusta.
 
 ## Skills Available
 
