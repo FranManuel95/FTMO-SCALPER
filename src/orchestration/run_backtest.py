@@ -57,6 +57,9 @@ def run_backtest(
     rsi_oversold: float | None = None,
     rsi_overbought: float | None = None,
     bb_std: float | None = None,
+    exit_mode: str = "fixed",        # "fixed" | "partial" | "trail"
+    partial_tp_r: float = 1.5,       # first TP level (in R multiples) for "partial"
+    trail_atr_mult: float = 1.0,     # ATR multiplier for trailing stop
 ) -> dict:
     setup_logging()
 
@@ -68,6 +71,8 @@ def run_backtest(
         timeframe=timeframe,
     )
     df.attrs["symbol"] = symbol
+    from src.features.technical.indicators import add_atr as _add_atr
+    df = _add_atr(df, 14)   # needed for trailing stop exit mode
     print(f"[data] Cargadas {len(df)} velas de {symbol} {timeframe} ({df.index[0]} → {df.index[-1]})")
 
     if strategy == "breakout":
@@ -132,6 +137,17 @@ def run_backtest(
         print(f"[signals] FVG | ADX>{fvg_cfg.adx_min} | H4 trend {'ON' if htf_trend else 'OFF'} | RR {fvg_cfg.rr_target} | maxBars {fvg_cfg.max_bars_to_fill}")
         signals = generate_fvg_signals(df, fvg_cfg)
         diag_rows = []
+    elif strategy == "london_open":
+        from src.signals.breakout.london_open_breakout import LondonOpenBreakoutConfig, generate_london_open_breakout_signals
+        lo_kwargs: dict = dict(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        if adx_min is not None:
+            lo_kwargs["adx_min"] = adx_min
+        if rr_target is not None:
+            lo_kwargs["rr_target"] = rr_target
+        lo_cfg = LondonOpenBreakoutConfig(**lo_kwargs)
+        print(f"[signals] London ORB | Range {lo_cfg.range_start_utc:02d}:00-{lo_cfg.range_end_utc:02d}:00 UTC | ADX>{lo_cfg.adx_min} | H4 trend {'ON' if htf_trend else 'OFF'} | RR {lo_cfg.rr_target}")
+        signals = generate_london_open_breakout_signals(df, lo_cfg)
+        diag_rows = []
     elif strategy == "ny_breakout":
         from src.signals.breakout.ny_open_breakout import NYOpenBreakoutConfig, generate_ny_open_breakout_signals
         ny_kwargs: dict = dict(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
@@ -174,21 +190,87 @@ def run_backtest(
         outcome = "open"
         bars_to_exit = 0
 
+        risk_dist = abs(sig.entry_price - sig.stop_loss)
+        sl = sig.stop_loss           # mutable SL for trailing / breakeven logic
+        partial_locked = False       # partial TP already hit
+        partial_pnl_r = 0.0          # R captured in partial exit
+
+        # Precompute ATR for trail mode (use last ATR value from pre-signal data)
+        trail_atr = 0.0
+        if exit_mode == "trail" and "atr_14" in df.columns:
+            pre = df[df.index <= sig.timestamp]["atr_14"].dropna()
+            trail_atr = float(pre.iloc[-1]) if len(pre) > 0 else risk_dist * 0.5
+
         for ts, bar in future.iterrows():
             bars_to_exit += 1
             if sig.side == Side.LONG:
-                if bar["low"] <= sig.stop_loss:
-                    exit_price, exit_time, outcome = sig.stop_loss, ts, "SL"
+                # ── check SL first ──
+                if bar["low"] <= sl:
+                    if partial_locked:
+                        # 50% locked at partial_tp_r, rest exits at breakeven SL
+                        combined_r = 0.5 * partial_pnl_r + 0.5 * ((sl - sig.entry_price) / risk_dist)
+                        exit_price = sig.entry_price + combined_r * risk_dist
+                        outcome = "SL_PARTIAL"
+                    else:
+                        exit_price = sl
+                        outcome = "SL"
+                    exit_time = ts
                     break
+                # ── partial TP (first target) ──
+                if exit_mode == "partial" and not partial_locked:
+                    p_tp = sig.entry_price + partial_tp_r * risk_dist
+                    if bar["high"] >= p_tp:
+                        partial_locked = True
+                        partial_pnl_r = partial_tp_r
+                        sl = sig.entry_price      # move SL to breakeven
+                        continue                  # keep running for full TP
+                # ── trail: ratchet SL up ──
+                if exit_mode == "trail" and trail_atr > 0:
+                    trail_sl = bar["high"] - trail_atr * trail_atr_mult
+                    if trail_sl > sl:
+                        sl = trail_sl
+                # ── full TP ──
                 if bar["high"] >= sig.take_profit:
-                    exit_price, exit_time, outcome = sig.take_profit, ts, "TP"
+                    if partial_locked:
+                        combined_r = 0.5 * partial_pnl_r + 0.5 * sig.risk_reward
+                        exit_price = sig.entry_price + combined_r * risk_dist
+                        outcome = "TP_PARTIAL"
+                    else:
+                        exit_price = sig.take_profit
+                        outcome = "TP"
+                    exit_time = ts
                     break
-            else:
-                if bar["high"] >= sig.stop_loss:
-                    exit_price, exit_time, outcome = sig.stop_loss, ts, "SL"
+            else:  # SHORT
+                if bar["high"] >= sl:
+                    if partial_locked:
+                        combined_r = 0.5 * partial_pnl_r + 0.5 * ((sig.entry_price - sl) / risk_dist)
+                        exit_price = sig.entry_price - combined_r * risk_dist
+                        outcome = "SL_PARTIAL"
+                    else:
+                        exit_price = sl
+                        outcome = "SL"
+                    exit_time = ts
                     break
+                if exit_mode == "partial" and not partial_locked:
+                    p_tp = sig.entry_price - partial_tp_r * risk_dist
+                    if bar["low"] <= p_tp:
+                        partial_locked = True
+                        partial_pnl_r = partial_tp_r
+                        sl = sig.entry_price
+                        continue
+                if exit_mode == "trail" and trail_atr > 0:
+                    trail_sl = bar["low"] + trail_atr * trail_atr_mult
+                    if trail_sl < sl:
+                        sl = trail_sl
                 if bar["low"] <= sig.take_profit:
-                    exit_price, exit_time, outcome = sig.take_profit, ts, "TP"
+                    if partial_locked:
+                        combined_r = 0.5 * partial_pnl_r + 0.5 * sig.risk_reward
+                        exit_price = sig.entry_price - combined_r * risk_dist
+                        outcome = "TP_PARTIAL"
+                    else:
+                        exit_price = sig.take_profit
+                        outcome = "TP"
+                    exit_time = ts
                     break
 
         trade = Trade(
@@ -270,7 +352,7 @@ def run_backtest(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Backtest — Trading Research Lab")
     parser.add_argument("--symbol", default="XAUUSD")
-    parser.add_argument("--strategy", default="breakout", choices=["breakout", "pullback"])
+    parser.add_argument("--strategy", default="breakout", choices=["breakout", "pullback", "mean_reversion", "fvg", "london_open", "ny_breakout"])
     parser.add_argument("--start", default="2023-01-01")
     parser.add_argument("--end", default="2024-01-01")
     parser.add_argument("--timeframe", default="15m")
@@ -285,6 +367,9 @@ if __name__ == "__main__":
     parser.add_argument("--rr-target", type=float, default=None, help="Ratio RR objetivo (default: 2.0)")
     parser.add_argument("--daily-adx-min", type=float, default=None, help="ADX mínimo en Daily para filtro de régimen (default: OFF)")
     parser.add_argument("--weekly-regime", action="store_true", help="Activar filtro EMA50 semanal como régimen macro")
+    parser.add_argument("--exit-mode", default="fixed", choices=["fixed", "partial", "trail"], help="Modo de salida: fixed | partial | trail")
+    parser.add_argument("--partial-tp-r", type=float, default=1.5, help="R para el primer TP parcial (default: 1.5)")
+    parser.add_argument("--trail-atr-mult", type=float, default=1.0, help="Multiplicador ATR para trailing stop (default: 1.0)")
     args = parser.parse_args()
 
     results = run_backtest(
@@ -292,5 +377,6 @@ if __name__ == "__main__":
         args.timeframe, args.balance, args.risk, args.data_dir,
         args.tz_offset, not args.no_htf, args.diagnostic, args.research,
         args.adx_min, args.rr_target, args.daily_adx_min, args.weekly_regime,
+        exit_mode=args.exit_mode, partial_tp_r=args.partial_tp_r, trail_atr_mult=args.trail_atr_mult,
     )
     print(json.dumps(results, indent=2, default=str))

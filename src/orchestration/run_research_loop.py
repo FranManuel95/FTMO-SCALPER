@@ -153,6 +153,8 @@ def run_research_loop(spec_path: str, force_wf: bool = False) -> dict:
         rsi_oversold=p.get("rsi_oversold"),
         rsi_overbought=p.get("rsi_overbought"),
         bb_std=p.get("bb_std"),
+        exit_mode=p.get("exit_mode", "fixed"),
+        trail_atr_mult=p.get("trail_atr_mult", 1.0),
     )
 
     sections = []
@@ -227,6 +229,8 @@ def run_research_loop(spec_path: str, force_wf: bool = False) -> dict:
         rsi_oversold=p.get("rsi_oversold"),
         rsi_overbought=p.get("rsi_overbought"),
         bb_std=p.get("bb_std"),
+        exit_mode=p.get("exit_mode", "fixed"),
+        trail_atr_mult=p.get("trail_atr_mult", 1.0),
     )
 
     wf_sum = wf_res["summary"]

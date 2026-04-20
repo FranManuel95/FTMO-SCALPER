@@ -148,6 +148,8 @@ def run_validation(
     rsi_oversold: float | None = None,
     rsi_overbought: float | None = None,
     bb_std: float | None = None,
+    exit_mode: str = "fixed",
+    trail_atr_mult: float = 1.0,
 ) -> dict:
     setup_logging()
 
@@ -182,7 +184,7 @@ def run_validation(
             initial_balance=initial_balance, risk_pct=risk,
             research=True, adx_min=adx_min, rr_target=rr_target,
             rsi_oversold=rsi_oversold, rsi_overbought=rsi_overbought,
-            bb_std=bb_std,
+            bb_std=bb_std, exit_mode=exit_mode, trail_atr_mult=trail_atr_mult,
         )
         def _run(start, end):
             return run_backtest(start=start, end=end, **bt_kwargs)
@@ -332,6 +334,8 @@ if __name__ == "__main__":
     parser.add_argument("--oos-months",type=int,   default=6)
     parser.add_argument("--step",      type=int,   default=6)
     parser.add_argument("--mc-sims",   type=int,   default=5000)
+    parser.add_argument("--exit-mode", default="fixed", choices=["fixed", "partial", "trail"])
+    parser.add_argument("--trail-atr-mult", type=float, default=1.0)
     args = parser.parse_args()
 
     run_validation(
@@ -339,5 +343,5 @@ if __name__ == "__main__":
         start=args.start, end=args.end, risk=args.risk,
         adx_min=args.adx_min, rr_target=args.rr_target,
         is_months=args.is_months, oos_months=args.oos_months, step_months=args.step,
-        n_mc=args.mc_sims,
+        n_mc=args.mc_sims, exit_mode=args.exit_mode, trail_atr_mult=args.trail_atr_mult,
     )
