@@ -13,7 +13,7 @@ params:
   rr_target: 2.5
   risk_pct: 0.003
   exit_mode: trail
-  trail_atr_mult: 0.2
+  trail_atr_mult: 0.5
 periods:
   is_start: '2023-01-01'
   is_end: '2025-01-01'
@@ -28,7 +28,8 @@ gates:
   min_trades: 30
   max_is_oos_degradation: 0.35
 status: validated
-verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 24.893 | WFE 2.335 |
-  P(ruin) 0.0% | Max DD p95 0.5% | PnL median $1207/6m en $10k | Trail optimizado
-  0.2xATR (spread USDJPY 0.5pip vs offset ~4.8pips — viable). Sweet spot sweep
-  trail=0.2 supera trail=0.5 en PF x8 con mejor DD.'
+verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 3.219 | WFE 1.357 |
+  P(ruin) 0.0% | Max DD p95 0.7% | PnL median ~$1,450/6m en $10k | Trail live=0.5xATR.
+  NOTA: trail=0.2 da PF 24.893 OOS pero WR 87-89% (extremadamente alto — riesgo de
+  sobreajuste a regimen tendencial). Trail=0.5 mas conservador y robusto para live.
+  Comparar con EURJPY Asian ORB (trail=0.3, WR 73-89% mas variable — mas saludable).'
