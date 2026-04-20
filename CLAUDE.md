@@ -108,9 +108,9 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **Trailing stop effect:** Converts ranging-market losses (2023 PF=0.95 fixed) to wins (2023 PF=1.76 trail). Tight trail locks any favorable move, cutting losers early in choppy conditions.
 
 **USDJPY 1H — ESTRATEGIA SECUNDARIA (CONDITIONAL)**
-- **Best parameters:** `adx_min=20`, `rr_target=2.5`, `risk_pct=0.003` ← 0.3% para FTMO safety
-- **Walk-forward (2022–2026, 6 windows):** 6/6 OOS profitable, avg OOS PF 1.362, P(profit) 96.5%, P(DD>10%) 1.8%, Max DD p95 8.2%
-- **FTMO viability:** Safe only at 0.3% risk (at 0.4% risk P(ruin)=7.6% — too high). Edge delgado, driver macro (JPY divergencia BoJ/Fed) puede agotarse.
+- **Best parameters:** `adx_min=20`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.5`
+- **Walk-forward (2022–2026, 6 windows):** 5/6 OOS profitable, avg OOS PF 1.513, P(ruin) 0.0%, Max DD p95 2.6%
+- **FTMO viability:** Safe at 0.3% risk. Trail reduce DD de 8.2%→2.6% y duplica ganancia mensual (~€96/mes en €10k). Riesgo macro: BoJ hikes pueden revertir driver JPY.
 - **Logic:** Same EMA20 pullback as XAUUSD but ADX threshold lowered to 20 (JPY crosses have lower ADX naturally). Both LONG and SHORT signals generated.
 
 ### ✅ NY Open Breakout — VALIDADA (`src/signals/breakout/ny_open_breakout.py`)
