@@ -82,13 +82,48 @@ def build_xauusd_london_orb_15m():
     return gen
 
 
+def build_usdjpy_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_nzdusd_pullback_1h():
+    from src.signals.pullback.trend_pullback import (
+        TrendPullbackConfig, generate_pullback_signals,
+    )
+    cfg = TrendPullbackConfig(adx_min=22, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_pullback_signals(df, cfg)
+    return gen
+
+
+# FVG XAUUSD — validada pero no activa en live por concentración en XAUUSD.
+# Descomentar cuando se quiera añadir al portfolio.
+# def build_xauusd_fvg_1h():
+#     from src.signals.fvg.fair_value_gap import FVGConfig, generate_fvg_signals
+#     cfg = FVGConfig(adx_min=20, rr_target=2.5, htf_trend_enabled=True)
+#     def gen(df):
+#         return generate_fvg_signals(df, cfg)
+#     return gen
+
+
 def build_default_portfolio() -> list[StrategyConfig]:
-    """Las 5 estrategias validadas con sus parámetros óptimos."""
+    """7 estrategias validadas con sus parámetros óptimos.
+
+    FVG XAUUSD validada pero excluida — 4ª estrategia en XAUUSD aumenta
+    correlación de pérdidas en regímenes laterales. Descomentar build_xauusd_fvg_1h()
+    arriba y añadir aquí cuando se quiera activar.
+    """
     return [
         StrategyConfig(
             strategy_id="xauusd_pullback_1h",
             symbol="XAUUSD", timeframe="1h",
-            risk_pct=0.004, trail_atr_mult=0.3,      # 0.3 es el óptimo del sweep
+            risk_pct=0.004, trail_atr_mult=0.3,
             generator=build_xauusd_pullback_1h(),
         ),
         StrategyConfig(
@@ -100,7 +135,7 @@ def build_default_portfolio() -> list[StrategyConfig]:
         StrategyConfig(
             strategy_id="usdjpy_pullback_1h",
             symbol="USDJPY", timeframe="1h",
-            risk_pct=0.003, trail_atr_mult=0.2,      # 0.2 es viable por spread bajo
+            risk_pct=0.003, trail_atr_mult=0.2,
             generator=build_usdjpy_pullback_1h(),
         ),
         StrategyConfig(
@@ -114,6 +149,18 @@ def build_default_portfolio() -> list[StrategyConfig]:
             symbol="XAUUSD", timeframe="15m",
             risk_pct=0.0025, trail_atr_mult=0.5,
             generator=build_xauusd_london_orb_15m(),
+        ),
+        StrategyConfig(
+            strategy_id="usdjpy_asian_orb_1h",
+            symbol="USDJPY", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.5,      # trail=0.5 validado 6/6, PF 3.22
+            generator=build_usdjpy_asian_orb_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="nzdusd_pullback_1h",
+            symbol="NZDUSD", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.4,      # ADX=22 sweet spot sweep
+            generator=build_nzdusd_pullback_1h(),
         ),
     ]
 
