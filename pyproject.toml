@@ -48,6 +48,9 @@ lean = [
 freqtrade = [
     "freqtrade>=2024.1",
 ]
+live = [
+    "MetaTrader5>=5.0.45 ; platform_system == 'Windows'",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
