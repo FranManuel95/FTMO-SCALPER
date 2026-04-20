@@ -2,9 +2,9 @@ name: XAUUSD Pullback 1h
 symbol: XAUUSD
 strategy: pullback
 timeframe: 1h
-hypothesis: 'XAUUSD tiene tendencia secular alcista. Pullback sobre EMA20 en estructura
-  alcista (EMA20>EMA50) con ADX>25 y filtro H4 trend. Edge robusto confirmado en
-  4+ anhos de datos (2022-2026) incluyendo el regimen de alza de tipos 2022.'
+hypothesis: XAUUSD tiene tendencia secular alcista. Pullback sobre EMA20 en estructura
+  alcista (EMA20>EMA50) con ADX>25 y filtro H4 trend. Edge robusto confirmado en 4+
+  anhos de datos (2022-2026) incluyendo el regimen de alza de tipos 2022.
 params:
   adx_min: 25
   rr_target: 2.5
@@ -23,6 +23,4 @@ gates:
   min_trades: 30
   max_is_oos_degradation: 0.35
 status: validated
-verdict: 'ROBUSTA — 5/6 OOS profitable, PF OOS medio 1.905, P(profit) 99.8%,
-  P(ruin DD>10%) 0.5%, Max DD p95 7.0%. Walk-forward 2022-2026 (6 ventanas).
-  FTMO-safe a 0.004 risk. ~4-5 trades/mes. Estrategia principal recomendada.'
+verdict: PASS — ESTRATEGIA ROBUSTA | OOS 83% profitable | PF 1.905 | P(profit) 99.8%

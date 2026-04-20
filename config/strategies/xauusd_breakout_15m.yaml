@@ -1,0 +1,27 @@
+name: XAUUSD Breakout 15m
+symbol: XAUUSD
+strategy: breakout
+timeframe: 15m
+hypothesis: 'London Breakout sobre rango asiatico (00:00-07:00 UTC). Cuando el precio
+  rompe el rango con confirmacion ADX>22 y tamano de rango 0.5x-4x ATR, se entra en
+  la direccion del breakout. Complementaria al pullback 1H: genera mas operaciones
+  en dias con momentum. Hipotesis: funciona bien en 2024-2026 (bull run oro).'
+params:
+  adx_min: 22
+  rr_target: 2.0
+  risk_pct: 0.004
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: frozen
+verdict: FAIL en Gate 1 (IS) — edge insuficiente o DD excesivo en muestra

@@ -97,29 +97,28 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 
 ## Strategies
 
-### Trend Pullback (best tested — `src/signals/pullback/trend_pullback.py`)
+### ✅ Trend Pullback — VALIDADA (`src/signals/pullback/trend_pullback.py`)
 
-- **Asset/TF:** XAUUSD 1h
+- **Asset/TF:** XAUUSD 1h — **ÚNICA ESTRATEGIA VALIDADA**
 - **Logic:** Price above EMA50 + EMA20 > EMA50 (bullish structure); pullback below EMA20 then close back above it; RSI < 60; ADX > threshold
 - **Key filters:** H4 trend (EMA50 > EMA200 on H4 resample), session 09:00–23:00 broker time
-- **Best parameters found:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.004`
-- **Walk-forward results (2022–2025, 4 windows):** 3/4 OOS profitable, avg OOS PF 1.724, Monte Carlo P(profit) 94.5%, P(DD>10%) 1.3%
-- **FTMO viability:** Safe at 0.4% risk (worst-case OOS DD 8.2% < 10% limit). ~4 trades/month; expect 12–18 months to hit 10% target in favorable conditions.
+- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.004`
+- **Walk-forward results (2022–2026, 6 windows):** 5/6 OOS profitable, avg OOS PF 1.905, P(profit) 99.8%, P(DD>10%) 0.5%, Max DD p95 7.0%
+- **FTMO viability:** Safe at 0.4% risk. ~4–5 trades/month; ~12–15 months para +10% target en condiciones favorables.
 
-### London Breakout (`src/signals/breakout/london_breakout.py`)
+### ❌ London Breakout (`src/signals/breakout/london_breakout.py`)
 
 - **Asset/TF:** XAUUSD 15m
 - **Logic:** Asian range identified 00:00–07:00 UTC; breakout confirmed by close outside range + buffer; ADX > 22; range size between 0.5x–4x ATR
-- **Best OOS result:** PF 2.25 in 2024 bull run
-- **Regime dependency:** Catastrophic in ranging markets (IS 2022–2023: PF 0.709). Same correlation as pullback — combining both amplifies losses in bad regimes without diversification benefit.
+- **Result:** FAIL Gate 1 IS 2022-2025 — PF 0.970, DD 12.8%. Catastrófico en mercados laterales (2022-2023). Misma dependencia de régimen que el pullback — combinarlos amplifica pérdidas.
 
-### BB Mean Reversion (`src/signals/mean_reversion/bb_reversion.py`)
+### ❌ BB Mean Reversion (`src/signals/mean_reversion/bb_reversion.py`)
 
-- **Asset/TF:** EURUSD 1h (tested); XAUUSD 1h (untested, no CSV currently)
-- **Logic:** LONG when close < BB lower + RSI oversold + ADX < adx_max + dist_to_mid > ATR*0.5; TP = BB midline (natural mean reversion target); SL = entry - ATR
-- **Best params for EURUSD:** `adx_max=22`, `rsi_oversold=27`, `rsi_overbought=73`, `bb_std=2.0`, `rr_target=1.5`
-- **Result:** Regime-dependent. 2022 (macro trend): PF 0.875. 2023 (ranging): PF 4.6, WR 65%. Full IS 2022-2024: PF 1.675, WR 41%, DD 1.4%. Cannot validate OOS without 2024+ data.
-- **BBReversionConfig** has `daily_adx_max` param (0=disabled) for optional macro regime filter.
+- **Asset/TF:** EURUSD 1h y XAUUSD 1h (ambos testados)
+- **Logic:** LONG cuando close < BB lower + RSI oversold + ADX < adx_max; TP = BB midline
+- **EURUSD resultado:** Régimen-dependiente. 2022 PF 0.67, 2023 PF 1.01, 2024 PF 1.80, 2025 PF 0.19. Sin consistencia entre años — no viable.
+- **XAUUSD resultado:** WR ~27% en todos los años, PF ~0.92-1.07. Sin edge claro.
+- **Nota data:** CSVs backtest/data usan UTC+2 (hora broker). El loader ahora prioriza backtest/data sobre data/raw.
 
 ### Combined (`src/orchestration/run_combined.py`)
 
@@ -145,10 +144,13 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **Weekly EMA50 regime had no effect** — insufficient warmup with Jan 2022 data start.
 - **Daily EMA50 vs EMA200 filter had no effect** — gold's secular bull means EMA50 > EMA200 during ranging periods too.
 - **Optimal risk for pullback XAUUSD:** 0.4% per trade. Raising to 0.5% would push worst-case OOS DD to ~10.3% (breaches FTMO limit).
-- **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD is not a trending instrument in the same way as XAUUSD. The EMA pullback edge appears XAUUSD-specific.
-- **EURUSD mean reversion is regime-dependent:** 2022 (strong USD macro trend, -15%) gives WR 27%, PF 0.875 with tight params (ADX<22, RSI<27/>73). 2023 (ranging) gives WR 65%, PF 4.6. No price-based filter (daily ADX, direction) successfully isolates the bad regime because 2022 was macro-driven (Fed/ECB divergence), not identifiable from price action alone. Needs either 2024+ fresh data or a fundamental macro regime filter.
-- **EURUSD mean reversion params found:** ADX<22 + RSI<27/>73 + BB(20, 2.0) gives best quality signals. Wider BB std (2.5) makes performance worse. Both LONG and SHORT fail equally in 2022 downtrend.
-- **run_research_loop bug fixed:** Mean reversion params (rsi_oversold, rsi_overbought, bb_std) were not passed from YAML → run_backtest → BBReversionConfig. Fixed in both run_backtest.py and run_research_loop.py.
+- **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD is not a trending instrument in the same way as XAUUSD.
+- **EURUSD mean reversion:** Régimen-dependiente. Con datos correctos (UTC+2): 2022 PF 0.67, 2023 PF 1.01, 2024 PF 1.80, 2025 PF 0.19. Sin consistencia entre años. El buen resultado de 2023 previo (PF 4.6) era un artefacto del CSV UTC mal interpretado como UTC+2.
+- **XAUUSD mean reversion:** WR ~27% en todos los años. No complementario al pullback — fallan juntos.
+- **Multi-par scan (pullback):** Solo USDJPY muestra algo (PF OOS 1.30) pero P(ruin) 4.9% — peligroso para FTMO. Todos los demás pares sin edge.
+- **London Breakout 15M:** FAIL Gate 1 con IS 2022-2025 (PF 0.97, DD 12.8%). Solo funciona en bull run (2024), mismo régimen que pullback.
+- **Data timezone:** CSVs en backtest/data/ usan UTC+2 (hora broker MT5). El sistema usa tz_offset_hours=2 para ser consistente. Nunca mezclar con CSVs UTC-naive de data/raw/.
+- **run_research_loop bug fixed:** Mean reversion params (rsi_oversold, rsi_overbought, bb_std) were not passed from YAML → run_backtest → BBReversionConfig. Fixed.
 
 ## Risk Guards
 
