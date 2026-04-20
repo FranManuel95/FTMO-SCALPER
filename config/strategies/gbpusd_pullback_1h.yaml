@@ -1,0 +1,30 @@
+name: GBPUSD Pullback 1H
+symbol: GBPUSD
+strategy: pullback
+timeframe: 1h
+hypothesis: 'GBP tiene driver macro fuerte y unidireccional (BoE vs Fed). Divergencia
+  de tipos: Fed subio agresivamente en 2022-2023, BoE siguio pero con lag. En 2024-2025
+  la Fed empieza a bajar mientras BoE mantiene higher-for-longer. Pullback sobre EMA20
+  en estructura alcista con ADX>25 y filtro H4 trend. Trailing stop 0.5xATR desde
+  el inicio del spec.'
+params:
+  adx_min: 25
+  rr_target: 2.5
+  risk_pct: 0.004
+  exit_mode: trail
+  trail_atr_mult: 0.5
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: PASS — ESTRATEGIA ROBUSTA | OOS 100% profitable | PF 2.817 | P(profit) 100.0%

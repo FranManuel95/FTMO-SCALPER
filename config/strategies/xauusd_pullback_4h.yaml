@@ -1,0 +1,29 @@
+name: XAUUSD Pullback 4H
+symbol: XAUUSD
+strategy: pullback
+timeframe: 4h
+hypothesis: 'Mismo pullback EMA20 que en 1H pero en 4H. Senales mas limpias, menos
+  ruido, ATR ~$25-35 da mas margen al trail. Menos trades (~1-2/semana) pero mayor
+  fiabilidad esperada. El trailing stop 0.5xATR sigue la misma logica: captura impulsos
+  de sesion sin dejar correr perdidas.'
+params:
+  adx_min: 25
+  rr_target: 2.5
+  risk_pct: 0.004
+  exit_mode: trail
+  trail_atr_mult: 0.5
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: frozen
+verdict: FAIL en Gate 1 (IS) — edge insuficiente o DD excesivo en muestra

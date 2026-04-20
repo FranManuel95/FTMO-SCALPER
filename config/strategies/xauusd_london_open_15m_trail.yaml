@@ -1,0 +1,29 @@
+name: XAUUSD London Open ORB 15m Trail
+symbol: XAUUSD
+strategy: london_open
+timeframe: 15m
+hypothesis: 'Revisita London ORB frozen (IS PF=1.017 con fixed TP). El NY ORB tenia
+  PF=1.345 con fixed y paso a 4.205 con trail=0.5. El London ORB falla porque los
+  breakouts son falsos y revierten — exactamente el caso donde el trail convierte -1R
+  en +0.3R. Hipotesis: trail rescata la estrategia igual que hizo con NY ORB.'
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.5
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: pending
+verdict: ''
