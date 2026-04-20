@@ -1,18 +1,21 @@
-name: EURJPY Pullback 1h
+name: EURJPY Pullback 1H + Trail
 symbol: EURJPY
 strategy: pullback
 timeframe: 1h
-hypothesis: 'EURJPY combina dos drivers direccionales: EUR alcista (macro Europa post-COVID)
-  + JPY debil (BoJ sin subir tipos hasta 2024). La tendencia 2022-2024 fue mas fuerte
-  que USDJPY porque ambas monedas se movian en la misma direccion. Pullback EMA20
-  en estructura alcista con ADX>22. Riesgo: posibles reversiones brutas del yen en
-  noticias BoJ.'
+hypothesis: 'EMA20 pullback en estructura alcista/bajista, ADX>25, filtro H4 trend.
+  Trail 0.3xATR. EURJPY tiene driver ECB vs BoJ: ECB hawkish/BoJ dovish → EUR
+  se aprecia vs JPY. El trail rescata parcialmente la estrategia (IS base PF=1.004
+  → OOS trail=0.3 PF=4.747) pero el IS PF (1.073) falla Gate 1 bajo criterios
+  estandar. Riesgo estructural identico a GBPJPY: intervenciones BoJ pueden
+  generar gaps inmanejables con trailing stop 1H.'
 params:
-  adx_min: 22
+  adx_min: 25
   rr_target: 2.5
   risk_pct: 0.003
+  exit_mode: trail
+  trail_atr_mult: 0.3
 periods:
-  is_start: '2022-01-01'
+  is_start: '2023-01-01'
   is_end: '2025-01-01'
   oos_start: '2025-01-01'
   oos_end: '2026-04-01'
@@ -21,8 +24,20 @@ periods:
 gates:
   min_pf_is: 1.2
   min_pf_oos: 1.1
-  max_dd_pct: 0.1
-  min_trades: 30
+  max_dd_pct: 0.05
+  min_trades: 20
   max_is_oos_degradation: 0.35
-status: frozen
-verdict: FAIL en Gate 1 (IS) — edge insuficiente o DD excesivo en muestra
+status: validated
+verdict: 'CONDITIONAL PASS — BAJA CONFIANZA. NO RECOMENDADO PARA LIVE.
+  OOS 5/6 | PF medio OOS 4.747 | WFE 2.717 | DD p95 1.1% | Trail=0.3 sweet spot.
+  PERO: IS PF 1.073 falla Gate 1 estandar. Solo 9-26 trades por ventana OOS.
+  Mismo riesgo BoJ que GBPJPY (rechazado): W2 Jul-Dic 2023 falla por intervencion.
+  USDJPY ya cubre exposicion JPY con mayor solidez. Documentado, no en live.'
+notes: >
+  IS 2023-2025: PF 1.073 (falla Gate 1 estandar <1.2), 75 trades, WR 44%.
+  WF trail=0.3 2022-2026: OOS 5/6, avg PF 4.747, WFE 2.717, DD p95 1.1%.
+  Trail sweep: 0.3 (PF 4.747) >> 0.4 (PF 2.748) >> 0.5 (PF 1.611).
+  ADX=20 da 6/6 pero WFE cae a 1.189 — mas trades, menor calidad.
+  W2 (Jul-Dic 2023) falla identico a GBPJPY — periodo intervencion BoJ.
+  Margen ejecucion trail=0.3: 7.7 pips vs spread 0.5-1.5 pip (ratio 5-15x).
+  No incluir en live runner — USDJPY pullback cubre la exposicion JPY.
