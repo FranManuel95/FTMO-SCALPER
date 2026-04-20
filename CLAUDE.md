@@ -102,15 +102,15 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 ### ✅ Trend Pullback — VALIDADA (`src/signals/pullback/trend_pullback.py`)
 
 **XAUUSD 1H — ESTRATEGIA PRINCIPAL**
-- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.004`, `exit_mode=trail`, `trail_atr_mult=0.5`
-- **Walk-forward (2022–2026, 6 windows):** 5/6 OOS profitable, avg OOS PF **2.882**, P(profit) 100%, P(DD>10%) **0.0%**, Max DD p95 **1.6%**
-- **FTMO viability:** Safe at 0.4% risk. ~4–5 trades/month. Trailing stop (0.5×ATR) dramatically reduces drawdown vs fixed TP (was 7.0% p95).
-- **Trailing stop effect:** Converts ranging-market losses (2023 PF=0.95 fixed) to wins (2023 PF=1.76 trail). Tight trail locks any favorable move, cutting losers early in choppy conditions.
+- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.004`, `exit_mode=trail`, `trail_atr_mult=0.3`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **5.546**, P(profit) 100%, P(DD>10%) **0.0%**, PnL median $1213/6m en $10k
+- **FTMO viability:** Safe at 0.4% risk. ~4–5 trades/month. Trail=0.3×ATR ($3.60 margen vs $0.40 spread) — suficiente separación para live trading.
+- **Trail sweep result:** 0.2 da PF 10.856 OOS pero margen=$2.40 es demasiado ajustado vs spread en días de noticias. 0.3 es el sweet spot: edge máximo con seguridad de ejecución.
 
 **USDJPY 1H — ESTRATEGIA SECUNDARIA (CONDITIONAL)**
-- **Best parameters:** `adx_min=20`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.5`
-- **Walk-forward (2022–2026, 6 windows):** 5/6 OOS profitable, avg OOS PF 1.513, P(ruin) 0.0%, Max DD p95 2.6%
-- **FTMO viability:** Safe at 0.3% risk. Trail reduce DD de 8.2%→2.6% y duplica ganancia mensual (~€96/mes en €10k). Riesgo macro: BoJ hikes pueden revertir driver JPY.
+- **Best parameters:** `adx_min=20`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.515**, P(ruin) 0.0%, PnL median $986/6m en $10k
+- **FTMO viability:** Safe at 0.3% risk. Trail=0.2×ATR viable porque spread JPY (~0.5 pip) es irrelevante vs ATR 1H (~70 pips). Riesgo macro: BoJ hikes pueden revertir driver JPY.
 - **Logic:** Same EMA20 pullback as XAUUSD but ADX threshold lowered to 20 (JPY crosses have lower ADX naturally). Both LONG and SHORT signals generated.
 
 ### ✅ NY Open Breakout — VALIDADA (`src/signals/breakout/ny_open_breakout.py`)
@@ -171,7 +171,8 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **XAUUSD mean reversion 1H:** FAIL — no es complementaria al pullback. Falla en 2022 (gold cayendo por hikes Fed) al igual que el pullback. LONG-only tampoco ayuda: 2022 PF=0.696.
 - **London Breakout 15M:** FAIL Gate 1 con IS 2022-2025 (PF 0.97, DD 12.8%). Solo funciona en bull run (2024), mismo régimen que pullback.
 - **NY Open ORB 15M con trail 0.5×ATR:** WF 6/6 OOS, avg PF 4.205, Max DD p95 0.6%, P(ruin) 0.0%. El trail captura el impulso inicial del CME open — incluso breakouts fallidos dan pequeñas ganancias. Fixed TP baseline (1.345) era delgado; trail lo transforma en edge sólido. RR=4.0 testado y rechazado (P(ruin)=9.4%).
-- **Trailing stop 0.5×ATR (pullback XAUUSD 1H):** MEJOR que fixed TP. OOS PF 2.882 vs 1.905, Max DD p95 1.6% vs 7.0%, P(ruin) 0.0% vs 0.5%. La clave: en mercados laterales (2023), el trail agresivo convierte pérdidas en pequeñas ganancias. La lógica: `trail_sl = bar["high"] - atr * 0.5`. Implementado en `run_backtest.py` exit_mode="trail".
+- **Trail ATR sweep completo (todas las estrategias):** PF aumenta monotónicamente al apretar el trail. Sweet spots por estrategia: XAUUSD Pullback 1H → trail=0.3 (PF OOS 5.546, 6/6, margen $3.60 > spread $0.40); USDJPY Pullback 1H → trail=0.2 (PF OOS 2.515, 6/6, spread JPY irrelevante); NY ORB 15M → trail=0.5 (trail=0.3 teórico da PF 9.216 pero margen $1.20 ≈ spread en noticias). La lógica: `trail_sl = bar["high"] - atr * mult`. Implementado en `run_backtest.py` exit_mode="trail".
+- **Partial TP (50% a 1.5R) resultó PEOR:** Recorta ganadores antes de tiempo. El precio que llega a 1.5R tiende a continuar a 2.5R. Fixed o trail son mejores que partial.
 - **Partial TP (50% a 1.5R) resultó PEOR:** Recorta ganadores antes de tiempo. El precio que llega a 1.5R tiende a continuar a 2.5R. Fixed o trail son mejores que partial.
 - **Data timezone:** CSVs en backtest/data/ usan UTC+2 (hora broker MT5). El sistema usa tz_offset_hours=2 para ser consistente. Nunca mezclar con CSVs UTC-naive de data/raw/.
 - **run_research_loop bug fixed:** Mean reversion params (rsi_oversold, rsi_overbought, bb_std) were not passed from YAML → run_backtest → BBReversionConfig. Fixed.

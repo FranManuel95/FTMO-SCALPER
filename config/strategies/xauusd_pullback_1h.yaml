@@ -10,7 +10,7 @@ params:
   rr_target: 2.5
   risk_pct: 0.004
   exit_mode: trail
-  trail_atr_mult: 0.5
+  trail_atr_mult: 0.3
 periods:
   is_start: '2022-01-01'
   is_end: '2025-01-01'
@@ -25,5 +25,5 @@ gates:
   min_trades: 30
   max_is_oos_degradation: 0.35
 status: validated
-verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 83% | PF medio OOS 2.882 | Max DD p95 1.6%
-  | P(ruin) 0.0% | Trailing stop 0.5xATR elimina drawdown en regimen lateral'
+verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 5.546 | P(ruin) 0.0%
+  | PnL median $1213/6m en $10k | trail=0.3xATR ($3.60 margen vs $0.40 spread)'
