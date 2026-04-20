@@ -1,0 +1,45 @@
+name: XAUUSD FVG 1h
+symbol: XAUUSD
+strategy: fvg
+timeframe: 1h
+hypothesis: >
+  ICT Fair Value Gaps (3-candle imbalances) on XAUUSD 1H act as institutional
+  support/resistance zones. When price retraces INTO a FVG that formed in the
+  direction of the H4 trend, it tends to continue in that direction.
+  Edge is modest but consistent across all 6 walk-forward windows (2022-2026).
+  High signal frequency (~140/6m) provides statistical significance quickly.
+params:
+  adx_min: 20
+  rr_target: 2.5
+  risk_pct: 0.004
+  exit_mode: trail
+  trail_atr_mult: 0.5
+  fvg_min_atr: 0.1
+  fvg_max_atr: 3.0
+  max_bars_to_fill: 48
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: marginal
+verdict: >
+  MARGINAL — edge presente pero delgado. OOS 6/6 | PF medio OOS 1.315 |
+  WFE 1.010 (4 ventanas validas) | P(ruin DD>10%) 5.2% | P(positivo) 99.8% |
+  Max DD p95 10.1% (borderline FTMO). Alta frecuencia (~140 trades/6m).
+  Uso recomendado: solo en combinacion con estrategia principal (pullback 1H)
+  para diversificacion, NO standalone en cuenta FTMO (DD p95 demasiado ajustado).
+notes: >
+  IS 2023-2025: PF 1.2753, WR 46.8%, 566 trades, DD 2.9%, Sharpe 1.36.
+  WF 2022-2026: OOS 6/6, avg PF 1.315, WFE 1.010.
+  Monte Carlo 866 OOS trades: PnL median $3050/4yr, P(DD>10%) 5.2%.
+  Ventana W1 IS PF=1.039 (2022 ranging) — misma debilidad que pullback pero menos severa.
+  Ventana W2 IS PF=1.188 — aun por debajo del umbral Gate 1 de 1.2.

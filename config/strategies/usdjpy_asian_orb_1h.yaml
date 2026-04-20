@@ -1,0 +1,31 @@
+name: USDJPY Asian Session ORB 1h
+symbol: USDJPY
+strategy: asian_orb
+timeframe: 1h
+hypothesis: 'La sesion asiatica (23:00-07:00 UTC = 01:00-09:00 broker) establece el
+  rango de precio del yen durante las horas de Tokyo. Cuando la sesion de Londres
+  abre y rompe ese rango, señala la direccion del dia para pares JPY. El carry-trade
+  del yen (BoJ vs Fed/BCE) crea movimientos direccionales fuertes. El breakout del
+  rango asiatico en direccion del trend H4 captura el impulso de apertura europea
+  en un par con spread bajo y ATR 1H elevado (~70 pips).'
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.003
+  exit_mode: trail
+  trail_atr_mult: 0.5
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: pending
+verdict: ''

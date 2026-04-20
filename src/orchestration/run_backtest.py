@@ -161,6 +161,17 @@ def run_backtest(
         print(f"[signals] NY ORB | Range {rng_s}-{rng_e} UTC | ADX>{ny_cfg.adx_min} | H4 trend {'ON' if htf_trend else 'OFF'} | RR {ny_cfg.rr_target}")
         signals = generate_ny_open_breakout_signals(df, ny_cfg)
         diag_rows = []
+    elif strategy == "asian_orb":
+        from src.signals.breakout.asian_session_orb import AsianSessionORBConfig, generate_asian_session_orb_signals
+        as_kwargs: dict = dict(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        if adx_min is not None:
+            as_kwargs["adx_min"] = adx_min
+        if rr_target is not None:
+            as_kwargs["rr_target"] = rr_target
+        as_cfg = AsianSessionORBConfig(**as_kwargs)
+        print(f"[signals] Asian ORB | Range 23:00-{as_cfg.asian_end_hour_utc:02d}:00 UTC | Entry {as_cfg.entry_start_utc:02d}:00-{as_cfg.entry_end_utc:02d}:00 UTC | ADX>{as_cfg.adx_min} | H4 trend {'ON' if htf_trend else 'OFF'} | RR {as_cfg.rr_target}")
+        signals = generate_asian_session_orb_signals(df, as_cfg)
+        diag_rows = []
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
 
@@ -352,7 +363,7 @@ def run_backtest(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Backtest — Trading Research Lab")
     parser.add_argument("--symbol", default="XAUUSD")
-    parser.add_argument("--strategy", default="breakout", choices=["breakout", "pullback", "mean_reversion", "fvg", "london_open", "ny_breakout"])
+    parser.add_argument("--strategy", default="breakout", choices=["breakout", "pullback", "mean_reversion", "fvg", "london_open", "ny_breakout", "asian_orb"])
     parser.add_argument("--start", default="2023-01-01")
     parser.add_argument("--end", default="2024-01-01")
     parser.add_argument("--timeframe", default="15m")
