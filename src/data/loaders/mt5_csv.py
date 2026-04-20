@@ -18,9 +18,9 @@ TIMEFRAME_SUFFIXES = {
 
 # Directorios donde buscar CSVs (en orden de prioridad)
 SEARCH_DIRS = [
+    Path("backtest/data"),
     Path("data/raw"),
     Path("data"),
-    Path("backtest/data"),
 ]
 
 
