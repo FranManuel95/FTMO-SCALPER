@@ -1,0 +1,38 @@
+name: XAUUSD Mean Reversion 1h
+symbol: XAUUSD
+strategy: mean_reversion
+timeframe: 1h
+hypothesis: 'XAUUSD pasa ~40% del tiempo en rangos (ej: H1 2022-2023). En periodos
+  de ADX bajo, el precio rebota entre las BB exteriores. La hipotesis es que la mean
+  reversion funciona CUANDO el pullback falla (régimen lateral), siendo complementaria.
+  ADX<25 asegura que solo operamos cuando el mercado no está en tendencia. La tendencia
+  secular alcista del oro favorece los LONGs desde BB inferior (buy the dip).
+
+  '
+params:
+  adx_max: 25
+  bb_period: 20
+  bb_std: 2.0
+  rsi_period: 14
+  rsi_oversold: 35
+  rsi_overbought: 65
+  rr_target: 1.5
+  atr_sl_mult: 1.0
+  risk_pct: 0.004
+periods:
+  is_start: '2022-01-01'
+  is_end: '2024-01-01'
+  oos_start: '2024-01-01'
+  oos_end: '2025-01-01'
+  wf_start: '2022-01-01'
+  wf_end: '2025-01-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: pending
+verdict: 'PENDIENTE — XAUUSD CSV no disponible en entorno actual. Hipótesis: complementaria
+  al pullback (funciona en régimen lateral cuando pullback falla). Testar cuando datos
+  XAUUSD_1H.csv estén disponibles.'

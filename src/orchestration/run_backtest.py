@@ -54,6 +54,9 @@ def run_backtest(
     rr_target: float | None = None,
     daily_adx_min: float | None = None,
     weekly_regime: bool = False,
+    rsi_oversold: float | None = None,
+    rsi_overbought: float | None = None,
+    bb_std: float | None = None,
 ) -> dict:
     setup_logging()
 
@@ -100,6 +103,23 @@ def run_backtest(
         weekly_label = "WeeklyEMA ON" if weekly_regime else "WeeklyEMA OFF"
         print(f"[signals] {session_label} | {htf_label} | {daily_label} | {weekly_label} | ADX>{pb_cfg.adx_min} | RR {pb_cfg.rr_target}")
         signals = generate_pullback_signals(df, pb_cfg)
+        diag_rows = []
+    elif strategy == "mean_reversion":
+        from src.signals.mean_reversion.bb_reversion import BBReversionConfig, generate_bb_reversion_signals
+        mr_kwargs: dict = dict(tz_offset_hours=tz_offset)
+        if adx_min is not None:
+            mr_kwargs["adx_max"] = adx_min   # adx_min re-usado como adx_max para mean reversion
+        if rr_target is not None:
+            mr_kwargs["rr_target"] = rr_target
+        if rsi_oversold is not None:
+            mr_kwargs["rsi_oversold"] = rsi_oversold
+        if rsi_overbought is not None:
+            mr_kwargs["rsi_overbought"] = rsi_overbought
+        if bb_std is not None:
+            mr_kwargs["bb_std"] = bb_std
+        mr_cfg = BBReversionConfig(**mr_kwargs)
+        print(f"[signals] MeanReversion BB({mr_cfg.bb_period},{mr_cfg.bb_std}) | RSI oversold<{mr_cfg.rsi_oversold} overbought>{mr_cfg.rsi_overbought} | ADX<{mr_cfg.adx_max} | RR {mr_cfg.rr_target}")
+        signals = generate_bb_reversion_signals(df, mr_cfg)
         diag_rows = []
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")

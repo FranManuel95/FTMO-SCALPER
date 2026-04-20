@@ -143,13 +143,16 @@ def run_research_loop(spec_path: str, force_wf: bool = False) -> dict:
     strategy  = spec["strategy"]
     timeframe = spec["timeframe"]
     risk      = p["risk_pct"]
-    adx_min   = p.get("adx_min")
+    adx_min   = p.get("adx_min") or p.get("adx_max")  # adx_max for mean_reversion
     rr_target = p.get("rr_target")
 
     bt_kwargs = dict(
         symbol=symbol, strategy=strategy, timeframe=timeframe,
         initial_balance=10000.0, risk_pct=risk,
         research=True, adx_min=adx_min, rr_target=rr_target,
+        rsi_oversold=p.get("rsi_oversold"),
+        rsi_overbought=p.get("rsi_overbought"),
+        bb_std=p.get("bb_std"),
     )
 
     sections = []
@@ -200,14 +203,18 @@ def run_research_loop(spec_path: str, force_wf: bool = False) -> dict:
 
     gate2_ok = oos_passed and deg_passed
     if not gate2_ok:
-        verdict = "FAIL en Gate 2 (OOS) — edge no se mantiene fuera de muestra"
-        sections.append(f"\n**Status: FAIL ✗** — pipeline detenido")
-        print(f"\n  → FAIL Gate 2. Deteniendo pipeline.")
-        _save(spec, sections, verdict, status)
-        return {"verdict": verdict, "gate_failed": 2, "is": is_res, "oos": oos_res}
-
-    sections.append(f"\n**Status: PASS ✓**")
-    print(f"\n  → PASS Gate 2 ✓")
+        if force_wf:
+            sections.append(f"\n**Status: FAIL ✗** (ignorado — force_wf activo)")
+            print(f"\n  → FAIL Gate 2 (ignorado por --force-wf, continuando a WF)")
+        else:
+            verdict = "FAIL en Gate 2 (OOS) — edge no se mantiene fuera de muestra"
+            sections.append(f"\n**Status: FAIL ✗** — pipeline detenido")
+            print(f"\n  → FAIL Gate 2. Deteniendo pipeline.")
+            _save(spec, sections, verdict, status)
+            return {"verdict": verdict, "gate_failed": 2, "is": is_res, "oos": oos_res}
+    else:
+        sections.append(f"\n**Status: PASS ✓**")
+        print(f"\n  → PASS Gate 2 ✓")
 
     # ── GATE 3: Walk-Forward + Monte Carlo ────────────────────────────────────
     print(f"\n[Gate 3] Walk-Forward: {per['wf_start']} → {per['wf_end']}")
@@ -217,6 +224,9 @@ def run_research_loop(spec_path: str, force_wf: bool = False) -> dict:
         start=per["wf_start"], end=per["wf_end"],
         risk=risk, adx_min=adx_min, rr_target=rr_target,
         n_mc=5000, initial_balance=10000.0,
+        rsi_oversold=p.get("rsi_oversold"),
+        rsi_overbought=p.get("rsi_overbought"),
+        bb_std=p.get("bb_std"),
     )
 
     wf_sum = wf_res["summary"]

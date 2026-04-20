@@ -145,6 +145,9 @@ def run_validation(
     step_months: int = 6,
     n_mc: int = 5000,
     initial_balance: float = 10000.0,
+    rsi_oversold: float | None = None,
+    rsi_overbought: float | None = None,
+    bb_std: float | None = None,
 ) -> dict:
     setup_logging()
 
@@ -178,6 +181,8 @@ def run_validation(
             symbol=symbol, strategy=strategy, timeframe=timeframe,
             initial_balance=initial_balance, risk_pct=risk,
             research=True, adx_min=adx_min, rr_target=rr_target,
+            rsi_oversold=rsi_oversold, rsi_overbought=rsi_overbought,
+            bb_std=bb_std,
         )
         def _run(start, end):
             return run_backtest(start=start, end=end, **bt_kwargs)
@@ -316,7 +321,7 @@ def run_validation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Walk-forward + Monte Carlo validation")
     parser.add_argument("--symbol",    default="XAUUSD")
-    parser.add_argument("--strategy",  default="pullback", choices=["breakout", "pullback", "combined"])
+    parser.add_argument("--strategy",  default="pullback", choices=["breakout", "pullback", "combined", "mean_reversion"])
     parser.add_argument("--timeframe", default="1h")
     parser.add_argument("--start",     default="2022-01-01")
     parser.add_argument("--end",       default="2025-01-01")

@@ -1,0 +1,37 @@
+name: EURUSD Mean Reversion 1h
+symbol: EURUSD
+strategy: mean_reversion
+timeframe: 1h
+hypothesis: 'EURUSD pasa gran parte del tiempo en rangos. Cuando el precio se aleja
+  significativamente de su media (Bollinger Band exterior) en un contexto de mercado
+  lateral (ADX bajo), tiende a revertir. Params ajustados: ADX<22 y RSI<27/>73 para
+  filtrar solo señales de alta calidad.
+
+  '
+params:
+  adx_max: 22
+  bb_period: 20
+  bb_std: 2.0
+  rsi_period: 14
+  rsi_oversold: 27
+  rsi_overbought: 73
+  rr_target: 1.5
+  atr_sl_mult: 1.0
+  risk_pct: 0.004
+periods:
+  is_start: '2022-01-01'
+  is_end: '2023-01-01'
+  oos_start: '2023-01-01'
+  oos_end: '2024-01-01'
+  wf_start: '2022-01-01'
+  wf_end: '2024-01-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: frozen
+verdict: 'REGIME-DEPENDENT — 2022 macro downtrend causa PF 0.875 (FAIL IS). 2023
+  ranging: PF 4.6, WR 65%, n=23 trades. Sin datos 2024+ no es posible validar OOS
+  independiente. Requiere filtro macro externo (fundamental) o mas datos historicos.'
