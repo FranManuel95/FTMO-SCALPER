@@ -14,7 +14,6 @@ __pycache__/
 data/raw/
 data/processed/
 data/external/
-backtest/data/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/external/.gitkeep
