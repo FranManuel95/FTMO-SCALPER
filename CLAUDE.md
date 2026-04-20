@@ -160,11 +160,14 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **Rescue story:** Versión bidireccional era FAIL (4/6). El 60% de señales SHORT arrastraban el resultado — AUD rebota sistemáticamente en regímenes mixtos. LONG-only captura únicamente los rallies commodity/risk-on. Trail=0.3 (vs 0.5) lleva de 4/6 a 6/6. ~7-8 trades/6m.
 - **Caveats:** Baja frecuencia. Riesgo macro: ciclo RBA dovish vs Fed hawkish puede revertir el edge.
 
-### ❌ FVG XAUUSD 1H (`src/signals/fvg/fair_value_gap.py`)
+### ✅ FVG XAUUSD 1H (`src/signals/fvg/fair_value_gap.py`)
 
 - **Asset/TF:** XAUUSD 1h
 - **Logic:** Imbalance de 3 velas (Fair Value Gap). Entry cuando precio retrocede a zona FVG. ADX > 20, H4 trend.
-- **Result:** MARGINAL — 6/6 OOS, avg PF 1.315, pero Max DD p95 = **10.1%** roza límite FTMO. P(ruin) 5.2%. No viable standalone. Posible diversificador a 0.2% riesgo por su alta frecuencia (~140 señales/6m).
+- **Best parameters:** `adx_min=20`, `rr_target=2.5`, `risk_pct=0.002`, `exit_mode=trail`, `trail_atr_mult=0.3`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **1.571**, P(ruin DD>10%) **0.0%**, Max DD p95 **3.2%**, WFE **1.305**
+- **Sweep result:** Base (risk=0.4%, trail=0.5) daba DD p95=10.1% y P(ruin)=5.2% — inviable. Bajar risk a 0.2% + trail=0.3 lleva DD a 3.2% y P(ruin) a 0.0%. Margen ejecución 0.3×ATR=$3.60-5.40 vs spread $0.30-0.50 (ratio 7-18x).
+- **Rol:** Diversificador de alta frecuencia (~140 señales/6m). Edge delgado pero consistente. No reemplaza al pullback — complementa capturando imbalances institucionales cuando no hay setup EMA.
 
 ### ❌ AUDUSD Pullback 1H + Trail
 

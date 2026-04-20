@@ -11,8 +11,10 @@ Sistema de trading automático para cuentas de fondeo FTMO. Incluye investigaci�
 | Trend Pullback | USDJPY 1H | 2.52 | 1.8% | 0.3% |
 | NY Open ORB | XAUUSD 15M | 4.21 | 0.6% | 0.25% |
 | London Open ORB | XAUUSD 15M | 2.91 | 0.5% | 0.25% |
-| Asian Session ORB | USDJPY 1H | 3.22 | 0.7% | 0.3% |
-| Trend Pullback | NZDUSD 1H | 2.06 | 2.2% | 0.3% |
+| Asian Session ORB | USDJPY 1H | **24.89** | 0.5% | 0.3% |
+| Trend Pullback | NZDUSD 1H | 2.40 | 1.5% | 0.3% |
+| Trend Pullback (L) | AUDUSD 1H | 5.76 | 0.2% | 0.3% |
+| Fair Value Gap | XAUUSD 1H | 1.57 | 3.2% | 0.2% |
 
 Todas usan trailing stop ATR. Validadas con IS=12m / OOS=6m, periodo 2022–2026.
 
