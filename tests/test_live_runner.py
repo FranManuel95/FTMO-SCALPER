@@ -11,6 +11,7 @@ import pytest
 
 from src.core.types import Signal, Side, SignalType
 from src.live.mt5_client import MT5Client
+from src.live.notifier import Notifier
 from src.live.portfolio_runner import PortfolioRunner, StrategyConfig
 
 
@@ -119,3 +120,42 @@ def test_trail_manager_never_relaxes_sl():
     # new_sl = max(2010, 2007) - 2 = 2008 > 2005 → sí actualiza hacia arriba
     assert pos.stop_loss == pytest.approx(2008.0)
     assert n == 1
+
+
+class _CapturingNotifier(Notifier):
+    def __init__(self):
+        self.events: list[tuple[str, tuple]] = []
+
+    def on_startup(self, balance, strategies):
+        self.events.append(("startup", (balance, tuple(strategies))))
+
+    def on_signal(self, strategy_id, sig):
+        self.events.append(("signal", (strategy_id, sig.symbol)))
+
+    def on_order_opened(self, pos):
+        self.events.append(("opened", (pos.ticket, pos.symbol)))
+
+    def on_guard_triggered(self, guard, reason):
+        self.events.append(("guard", (guard, reason)))
+
+
+def test_notifier_receives_startup_event():
+    """Runner notifica al arrancar con balance y lista de estrategias."""
+    client = MT5Client(fake=True)
+    client.connect()
+    notifier = _CapturingNotifier()
+    cfg = StrategyConfig(
+        strategy_id="dummy_test",
+        symbol="XAUUSD",
+        timeframe="1h",
+        risk_pct=0.004,
+        trail_atr_mult=0.5,
+        generator=_dummy_generator,
+    )
+    PortfolioRunner(client=client, strategies=[cfg], dry_run=True, notifier=notifier)
+
+    assert any(e[0] == "startup" for e in notifier.events)
+    kind, payload = notifier.events[0]
+    assert kind == "startup"
+    assert payload[0] == 10_000.0  # balance fake
+    assert payload[1] == ("dummy_test",)

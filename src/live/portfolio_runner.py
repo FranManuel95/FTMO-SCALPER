@@ -32,6 +32,7 @@ from src.risk.max_loss_guard import MaxLossGuard
 
 from .live_data_loader import LiveDataLoader
 from .mt5_client import MT5Client
+from .notifier import NullNotifier, Notifier
 from .order_manager import LivePosition, OrderManager
 from .strategy_state import StrategyState
 from .trail_manager import TrailManager
@@ -61,6 +62,7 @@ class PortfolioRunner:
     dry_run: bool = True
     tick_interval_seconds: int = 30
     magic: int = 90210
+    notifier: Notifier = field(default_factory=NullNotifier)
     _positions: dict[int, LivePosition] = field(default_factory=dict)
     _state: StrategyState = field(default_factory=StrategyState)
     _data_loader: LiveDataLoader = field(init=False)
@@ -84,6 +86,7 @@ class PortfolioRunner:
             f"PortfolioRunner inicializado | balance={initial_balance:.2f} | "
             f"strategies={[s.strategy_id for s in self.strategies]} | dry_run={self.dry_run}"
         )
+        self.notifier.on_startup(initial_balance, [s.strategy_id for s in self.strategies])
 
     # ── Loop principal ────────────────────────────────────────────────────────
 
@@ -176,10 +179,18 @@ class PortfolioRunner:
 
         if self._daily_guard.is_blocked(now):
             logger.warning(f"[{cfg.strategy_id}] DailyLossGuard bloquea — señal descartada")
+            self.notifier.on_guard_triggered(
+                "DailyLossGuard", f"[{cfg.strategy_id}] señal descartada"
+            )
             return
         if self._max_guard.is_triggered():
             logger.error(f"[{cfg.strategy_id}] MaxLossGuard activo — parar operativa")
+            self.notifier.on_guard_triggered(
+                "MaxLossGuard", f"[{cfg.strategy_id}] parar operativa"
+            )
             return
+
+        self.notifier.on_signal(cfg.strategy_id, sig)
 
         atr = self._extract_atr(df, cfg.atr_column)
         if atr <= 0:
@@ -200,7 +211,7 @@ class PortfolioRunner:
         volume = float(
             balance * cfg.risk_pct / abs(sig.entry_price - sig.stop_loss)
         )
-        self._positions[ticket] = LivePosition(
+        pos = LivePosition(
             ticket=ticket,
             symbol=sig.symbol,
             side=sig.side,
@@ -212,6 +223,8 @@ class PortfolioRunner:
             atr_at_signal=atr,
             entry_time=now,
         )
+        self._positions[ticket] = pos
+        self.notifier.on_order_opened(pos)
 
     # ── Sincronización con MT5 ────────────────────────────────────────────────
 
@@ -236,6 +249,7 @@ class PortfolioRunner:
             logger.info(f"CLOSED ticket={ticket} pnl={pnl:.2f} strategy={pos.strategy_id}")
             self._daily_guard.record_pnl(pnl, close_time)
             self._max_guard.update(pnl)
+            self.notifier.on_position_closed(pos, pnl)
 
     # ── Utilidades ────────────────────────────────────────────────────────────
 

@@ -22,6 +22,7 @@ from src.features.technical.indicators import add_adx, add_atr
 from src.features.trend.htf_filter import add_htf_trend
 
 from .mt5_client import MT5Client, MT5Credentials
+from .notifier import NullNotifier, TelegramNotifier
 from .portfolio_runner import PortfolioRunner, StrategyConfig
 
 
@@ -130,6 +131,8 @@ def main() -> int:
                         help="Intervalo entre iteraciones (default 30s)")
     parser.add_argument("--once", action="store_true",
                         help="Ejecuta una sola iteración y sale (tests)")
+    parser.add_argument("--no-telegram", action="store_true",
+                        help="Desactiva notificaciones Telegram aunque haya env vars")
     args = parser.parse_args()
 
     setup_logging()
@@ -151,11 +154,14 @@ def main() -> int:
         logger.error("No se pudo conectar a MT5 — abortando")
         return 1
 
+    notifier = NullNotifier() if args.no_telegram else (TelegramNotifier.from_env() or NullNotifier())
+
     runner = PortfolioRunner(
         client=client,
         strategies=build_default_portfolio(),
         dry_run=dry_run,
         tick_interval_seconds=args.tick_seconds,
+        notifier=notifier,
     )
 
     if args.once:
