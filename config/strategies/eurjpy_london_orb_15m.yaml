@@ -1,0 +1,46 @@
+name: EURJPY London Open ORB 15M + Trail
+symbol: EURJPY
+strategy: london_orb
+timeframe: 15m
+hypothesis: >
+  Rango London Open 07:00-08:00 UTC en EURJPY 15M. Breakout entry 08:00-12:00 UTC
+  en direccion H4 trend, ADX>18, trail 0.5xATR. EUR es el motor durante la sesion
+  London — los flujos institucionales en EUR/JPY al abrir Londres crean breakouts
+  limpios del rango de la primera hora. Alta frecuencia (~85 trades/6m) proporciona
+  solidez estadistica superior al Asian ORB 1H. Misma logica que el validado
+  EURUSD London ORB (PF 3.978) aplicada al par EURJPY.
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.5
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: >
+  PASS — ROBUSTA. OOS 6/6 | PF medio OOS 4.031 | WFE 1.129 | P(ruin) 0.0% |
+  Max DD p95 0.6% | PnL median $1,498/6m en $10k | ~85 trades/6m OOS.
+  Mayor frecuencia que Asian ORB (85 vs 58 trades/6m) — mas robustez estadistica.
+  W1 WFE bajo (0.313) es artefacto de datos: CSV 15M empieza en abril 2022
+  (IS incompleto en W1 infla artificialmente el IS PF).
+  Correlacion con EURUSD London ORB: ambos entran al mismo tiempo (08:00 UTC)
+  con EUR como driver. No incluir ambas sin gestion de riesgo por par.
+notes: >
+  IS 2023-2025: PF 3.420, WR 60.3%, 322 trades, DD 0.09%.
+  WF trail=0.5 2022-2026: OOS 6/6, avg PF 4.031, WFE 1.129, DD p95 0.6%.
+  Monte Carlo: PnL median $1,498/6m, P(profit) 100%, P(ruin) 0.0%.
+  W1 WFE fail (0.313) = artefacto CSV 15M incompleto en 2022, no problema real.
+  Comparacion: Asian ORB tiene PF mas alto (9.356) pero menor frecuencia (58 vs 85 trades).
+  Elegir una de las dos para live — no ambas en EURJPY simultaneamente.

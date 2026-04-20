@@ -1,0 +1,45 @@
+name: USDCAD NY Open ORB 15M + Trail
+symbol: USDCAD
+strategy: ny_orb
+timeframe: 15m
+hypothesis: >
+  Rango NY Open primera hora 13:00-14:00 UTC en USDCAD 15M. Breakout entry
+  14:00-18:00 UTC en direccion H4 trend, ADX>18, trail 0.4xATR. USDCAD tiene
+  catalizadores de sesion NY potentes: datos petroleo (EIA 15:30 UTC), datos
+  economicos CAD (13:30 UTC) y apertura CME. El pullback falla en USDCAD porque
+  USD y CAD se cancelan como tendencia sostenida. El ORB captura la volatilidad
+  event-driven sin necesitar driver macro unidireccional. Mismo principio que
+  XAUUSD NY ORB pero aprovechando los catalizadores especificos del par.
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.4
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: >
+  PASS — ROBUSTA. OOS 6/6 | PF medio OOS 4.471 (trail=0.4) | WFE 0.823 |
+  P(ruin) 0.0% | Max DD p95 0.6% | PnL median $1,837/6m en $10k | ~90 trades/6m OOS.
+  Trail=0.4 sweet spot: margen 3.2-4.8 pips vs spread USDCAD 1.5-2 pip (ratio 1.6-3.2x).
+  Trail=0.5 tambien viable (PF 3.374) con mayor margen. Trail=0.3 demasiado ajustado.
+  Diversificacion genuina: sesion NY es independiente de London y Asian sessions
+  del portfolio actual. Driver petroleo/CAD completamente diferente a XAUUSD/JPY/EUR.
+notes: >
+  IS 2023-2025: PF 3.71 (trail=0.5), WR 57.9%, 344 trades, 24/24 meses profitable.
+  WF trail=0.4 2022-2026: OOS 6/6, avg PF 4.471, WFE 0.823, DD p95 0.6%.
+  Trail sweep: 0.3 (too tight, ~2.4-3.6 pip margin) < 0.4 (PF 4.471, sweet spot) < 0.5 (PF 3.374, safer).
+  El pullback USDCAD FAIL (IS PF 1.14 incluso con trail) — USD/CAD forces cancel each other.
+  USDCAD London ORB 15M tambien ROBUSTA 6/6 PF 4.083 — diferente sesion, complementaria.

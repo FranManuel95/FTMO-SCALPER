@@ -112,6 +112,36 @@ def build_eurusd_london_orb_15m():
     return gen
 
 
+def build_gbpjpy_london_orb_15m():
+    from src.signals.breakout.london_open_breakout import (
+        LondonOpenBreakoutConfig, generate_london_open_breakout_signals,
+    )
+    cfg = LondonOpenBreakoutConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_london_open_breakout_signals(df, cfg)
+    return gen
+
+
+def build_eurjpy_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_usdcad_ny_orb_15m():
+    from src.signals.breakout.ny_open_breakout import (
+        NYOpenBreakoutConfig, generate_ny_open_breakout_signals,
+    )
+    cfg = NYOpenBreakoutConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_ny_open_breakout_signals(df, cfg)
+    return gen
+
+
 # FVG XAUUSD — validada pero no activa en live por concentración en XAUUSD.
 # Descomentar cuando se quiera añadir al portfolio.
 # def build_xauusd_fvg_1h():
@@ -123,12 +153,11 @@ def build_eurusd_london_orb_15m():
 
 
 def build_default_portfolio() -> list[StrategyConfig]:
-    """8 estrategias validadas con sus parámetros óptimos.
+    """11 estrategias validadas con sus parámetros óptimos.
 
     FVG XAUUSD validada pero excluida — 4ª estrategia en XAUUSD aumenta
-    correlación de pérdidas en regímenes laterales. Descomentar build_xauusd_fvg_1h()
-    arriba y añadir aquí cuando se quiera activar.
-    EURUSD London ORB añadida: 6/6 OOS, PF 3.978, DD p95 0.6% — diversificador real.
+    correlación en regímenes laterales.
+    NOTA: GBPJPY London ORB requiere filtro manual en días reunión BoJ (~8/año).
     """
     return [
         StrategyConfig(
@@ -178,6 +207,24 @@ def build_default_portfolio() -> list[StrategyConfig]:
             symbol="EURUSD", timeframe="15m",
             risk_pct=0.0025, trail_atr_mult=0.5,     # 6/6 OOS, PF 3.978, DD p95 0.6%
             generator=build_eurusd_london_orb_15m(),
+        ),
+        StrategyConfig(
+            strategy_id="gbpjpy_london_orb_15m",
+            symbol="GBPJPY", timeframe="15m",
+            risk_pct=0.0025, trail_atr_mult=0.4,     # 6/6 OOS, PF 5.282, DD p95 0.4% — skip on BoJ days
+            generator=build_gbpjpy_london_orb_15m(),
+        ),
+        StrategyConfig(
+            strategy_id="eurjpy_asian_orb_1h",
+            symbol="EURJPY", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.3,      # 6/6 OOS, PF 9.356, DD p95 0.6%
+            generator=build_eurjpy_asian_orb_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="usdcad_ny_orb_15m",
+            symbol="USDCAD", timeframe="15m",
+            risk_pct=0.0025, trail_atr_mult=0.4,     # 6/6 OOS, PF 4.471, DD p95 0.6%
+            generator=build_usdcad_ny_orb_15m(),
         ),
     ]
 

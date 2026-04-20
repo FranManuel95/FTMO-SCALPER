@@ -190,6 +190,34 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **Trail sweep:** 0.3 da PF 9.372 pero margen 1.4 pips ≈ spread en noticias — inviable. 0.5 sweet spot con 2.4 pips de margen (ratio 2.4-4.8× vs spread EURUSD 0.5-1.0 pip).
 - **FTMO viability:** ~$1,442/6m en $10k. ~14-16 trades/mes — mayor frecuencia que pullbacks. EURUSD es el par más líquido — ejecución limpia. Diversifica genuinamente del portfolio XAUUSD.
 
+### ✅ EURJPY Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** EURJPY 1h
+- **Logic:** Rango asiático 23:00-07:00 UTC. Breakout entry 07:00-12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.3×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.3`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **9.356**, P(ruin) **0.0%**, Max DD p95 **0.6%**, WFE **1.581**
+- **Trail sweep:** 0.2 (PF 20.878, margen 5 pips, 3-10× spread) > 0.3 sweet spot (PF 9.356, 7.5 pips, 5-15×) > 0.5 (PF 3.765). Trail=0.2 comparable a USDJPY Asian ORB (PF 20.878 vs 24.893). Sweet spot operacional: trail=0.3.
+- **FTMO viability:** ~$1,604/6m en $10k. ~58 trades/6m OOS. Misma mecánica que USDJPY Asian ORB.
+
+### ✅ USDCAD NY Open ORB 15M + Trail — VALIDADA (`src/signals/breakout/ny_open_breakout.py`)
+
+- **Asset/TF:** USDCAD 15m
+- **Logic:** Rango NY Open 13:00-14:00 UTC. Breakout entry 14:00-18:00 UTC en dirección H4 trend. ADX > 18. Trail 0.4×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.4`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **4.471**, P(ruin) **0.0%**, Max DD p95 **0.6%**, WFE **0.823**
+- **Key insight:** USDCAD pullback falla (IS PF 1.14 incluso con trail) porque USD y CAD se cancelan como tendencia sostenida. Pero NY ORB captura volatilidad event-driven (datos petróleo EIA 15:30 UTC, datos CAD 13:30 UTC). ORB no necesita driver macro unidireccional.
+- **Trail=0.4 sweet spot:** margen 3.2-4.8 pips vs spread 1.5-2.0 pip (1.6-3.2×). Trail=0.3 demasiado ajustado. Trail=0.5 también viable.
+
+### ✅ GBPJPY London Open ORB 15M + Trail — VALIDADA (`src/signals/breakout/london_open_breakout.py`)
+
+- **Asset/TF:** GBPJPY 15m
+- **Logic:** Rango London Open 07:00-08:00 UTC. Breakout entry 08:00-12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.4×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.4`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **5.282**, P(ruin) **0.0%**, Max DD p95 **0.4%**, WFE **1.073**
+- **BoJ risk NEUTRALIZADO:** Duración media posición = 2 velas 15M (30 min). BoJ actúa 02:00-07:00 UTC; el rango 07:00-08:00 ya incorpora el shock. No hay overnight. Regla operacional: skip en días reunión BoJ (~8/año).
+- **Trail sweep:** 0.3 (PF 9.242, margen 4.1 pips, ratio 2.1×, borderline) > 0.4 sweet spot (PF 5.282, 5.5 pips, 2.8×) > 0.5 (PF 3.522, 6.9 pips, 3.4×).
+- Bidirectional pullback (4/6, BoJ risk) y LONG-only pullback (5/6 WFE 0.199, W5 PF 0.331) ambos rechazados.
+
 ### ✅ EURGBP Pullback 1H + Trail — CONDITIONAL PASS (`src/signals/pullback/trend_pullback.py`)
 
 - **Asset/TF:** EURGBP 1h
@@ -251,9 +279,14 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **EURUSD mean reversion:** Régimen-dependiente. Con datos correctos (UTC+2): 2022 PF 0.67, 2023 PF 1.01, 2024 PF 1.80, 2025 PF 0.19. Sin consistencia entre años. El buen resultado de 2023 previo (PF 4.6) era un artefacto del CSV UTC mal interpretado como UTC+2.
 - **XAUUSD mean reversion:** WR ~27% en todos los años. No complementario al pullback — fallan juntos.
 - **Multi-par scan completo (pullback):** USDJPY CONDITIONAL (validado a 0.3% riesgo). EURJPY con trail=0.3 da OOS 5/6 PF 4.747 pero IS PF=1.073 falla Gate 1 y trade counts muy bajos (9-26/ventana) — documentado, no en live. GBPJPY con trail FAIL 4/6 (W5 más reciente PF 0.682, BoJ gap risk descarta para live). AUDUSD FAIL (avg PF ~0.88). USDCAD FAIL Gate 1 con trail (IS PF=1.14). EURGBP CONDITIONAL PASS 5/6 PF 4.398 — documentado. USDCHF CONDITIONAL PASS 5/6 PF 2.669 — documentado. El edge EMA pullback requiere driver macro unidireccional fuerte.
-- **EURUSD London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 3.978, DD p95 0.6%, WFE 1.287, trail=0.5 (margen 2.4 pips vs spread 0.5-1.0 pip). Supera XAUUSD London ORB (PF 2.907). ~14-16 trades/mes, alta frecuencia. Trail=0.3 da PF 9.4 teórico pero margen 1.4 pips demasiado ajustado en días de noticias. AÑADIDA AL LIVE RUNNER.
-- **EURUSD NY Open ORB 15M CONDITIONAL:** 6/6 OOS, PF 2.745, DD p95 0.6%, pero W1 (PF 1.139) y W6 (PF 1.589) thin. Más débil que London ORB — EURUSD tiene el movimiento europeo ya descontado a las 13:00 UTC. Documentado, no en live runner inicial.
-- **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD is not a trending instrument in the same way as XAUUSD.
+- **EURUSD London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 3.978, DD p95 0.6%, WFE 1.287, trail=0.5 (margen 2.4 pips vs spread 0.5-1.0 pip). Supera XAUUSD London ORB (PF 2.907). ~14-16 trades/mes, alta frecuencia. Trail=0.3 da PF 9.4 teórico pero margen 1.4 pips demasiado ajustado en días de noticias. AÑADIDA AL LIVE RUNNER. Trail/ADX sweep confirmó: ADX=18 + RR=2.5 + trail=0.5 es el óptimo. ADX=22 arregla W2 WFE pero reduce PnL 33%. RR=3.0 estrictamente peor.
+- **EURUSD NY Open ORB 15M CONDITIONAL:** 6/6 OOS, PF 2.745, DD p95 0.6%, pero W1 (PF 1.139) y W6 (PF 1.589) thin. Más débil que London ORB. Documentado, no en live runner.
+- **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD no es instrumento trending.
+- **EURJPY Asian Session ORB 1H ROBUSTA:** 6/6 OOS, PF 9.356 (trail=0.3), WFE 1.581, DD p95 0.6%, ~58 trades/6m. Trail sweep: 0.2 (PF 20.878) > 0.3 (PF 9.356, sweet spot) > 0.5 (PF 3.765). Misma mecánica que USDJPY Asian ORB (PF 24.893) aplicada a EUR/JPY. JPY establece rango asiático, EUR rompe en London open. AÑADIDA AL LIVE RUNNER (trail=0.3).
+- **EURJPY London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 4.031, DD p95 0.6%, ~85 trades/6m. Documentado, no en live — correlaciona con EURUSD London ORB (mismo horario, EUR como driver).
+- **USDCAD NY Open ORB 15M ROBUSTA:** 6/6 OOS, PF 4.471 (trail=0.4), WFE 0.823, DD p95 0.6%, ~90 trades/6m. El pullback USDCAD falla porque USD/CAD se cancelan como tendencia, pero el ORB captura volatilidad event-driven (datos petróleo, datos CAD). AÑADIDA AL LIVE RUNNER (trail=0.4). Trail=0.3 too tight (margen 2.4-3.6 pip vs spread 1.5-2.0 pip). Trail=0.5 también viable.
+- **USDCAD London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 4.083 (trail=0.4), DD p95 0.5%. Documentado, no en live — evitar dos ORBs simultáneas en mismo par sin reducir riesgo.
+- **GBPJPY London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 5.282 (trail=0.4), WFE 1.073, DD p95 0.4%, ~87 trades/6m. Clave: BoJ gap risk NEUTRALIZADO — trades cierran en 30-45 min (mediana 2 velas 15M). BoJ actúa 02:00-07:00 UTC, entradas a las 08:00 UTC. El rango 07:00-08:00 UTC ya incorpora cualquier shock BoJ. AÑADIDA AL LIVE RUNNER (trail=0.4). Regla operacional: no operar en días reunión BoJ (~8/año). LONG-only pullback (5/6 pero WFE 0.199, W5 PF 0.331) y bidirectional pullback (4/6) ambos rechazados.
 - **XAUUSD 15M pullback:** FAIL — misma dependencia de régimen que 1H (2023 PF ~0.90 arrastra IS a ~1.06). Más señales no compensan la misma exposición al régimen.
 - **EURGBP mean reversion:** FAIL — régimen-dependiente: 2021-2022 PF>1.5, 2023 PF=0.829, 2024 PF=1.53, 2025 PF=1.03. Sin consistencia inter-año.
 - **XAUUSD mean reversion 1H:** FAIL — no es complementaria al pullback. Falla en 2022 (gold cayendo por hikes Fed) al igual que el pullback. LONG-only tampoco ayuda: 2022 PF=0.696.

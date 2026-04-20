@@ -1,0 +1,47 @@
+name: EURJPY Asian Session ORB 1H + Trail
+symbol: EURJPY
+strategy: asian_session_orb
+timeframe: 1h
+hypothesis: >
+  Construir rango sesion asiatica (23:00-07:00 UTC) en EURJPY. Breakout entry
+  07:00-12:00 UTC en direccion H4 trend, ADX>18, trail 0.3xATR. Logica: durante
+  la sesion asiatica el JPY domina y establece el rango. Al abrir Londres, los
+  flujos EUR rompen ese rango con impulso institucional. Misma mecanica que el
+  validado USDJPY Asian ORB (PF 24.893) pero con el par EUR/JPY. La entrada POSTERIOR
+  a la sesion asiatica evita la exposicion a sorpresas BoJ nocturnas — el evento
+  ya ocurrio cuando se entra en posicion.
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.003
+  exit_mode: trail
+  trail_atr_mult: 0.3
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: >
+  PASS — ROBUSTA. OOS 6/6 | PF medio OOS 9.356 (trail=0.3) | WFE 1.581 |
+  P(ruin) 0.0% | Max DD p95 0.6% | PnL median $1,604/6m en $10k | ~58 trades/6m OOS.
+  Trail sweep: 0.2 (PF 20.878, margen ~5 pips, ratio 3-10x spread) > 0.3 (PF 9.356,
+  margen ~7.5 pips, ratio 5-15x) > 0.5 (PF 3.765). Trail=0.3 es el sweet spot
+  operacional: PF excelente con margen seguro en dias de noticias EUR o JPY.
+  Correlacion con USDJPY Asian ORB: ambos entran al London open con breakout JPY.
+  Vigilar en dias con movimiento fuerte JPY — pueden dispararse juntos.
+notes: >
+  IS 2023-2025: PF 3.383, WR 61.0%, 223 trades, DD 0.11%.
+  WF trail=0.3 2022-2026: OOS 6/6, avg PF 9.356, WFE 1.581, DD p95 0.6%.
+  Trail sweep completo: trail=0.2 (PF 20.878) / trail=0.3 (PF 9.356) / trail=0.4 (PF 5.405) / trail=0.5 (PF 3.765).
+  Margen trail=0.3: ~7.5 pips vs spread EURJPY 0.5-1.5 pip (ratio 5-15x, holgado).
+  EURJPY London ORB 15M tambien ROBUSTA 6/6 PF 4.031 — estrategia complementaria.
+  No incluir ambas simultaneamente sin reducir risk — correlacion EUR/JPY alta.

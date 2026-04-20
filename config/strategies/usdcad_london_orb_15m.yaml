@@ -1,0 +1,42 @@
+name: USDCAD London Open ORB 15M + Trail
+symbol: USDCAD
+strategy: london_orb
+timeframe: 15m
+hypothesis: >
+  Rango London Open 07:00-08:00 UTC en USDCAD 15M. Breakout entry 08:00-12:00 UTC
+  en direccion H4 trend, ADX>18, trail 0.4xATR. Los flujos EUR/USD en la apertura
+  London arrastran al USDCAD via correlacion USD. Diferente sesion y catalisis al
+  NY ORB — puede operar mismo dia sin superposicion. Complementario al NY ORB.
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.4
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: >
+  PASS — ROBUSTA. OOS 6/6 | PF medio OOS 4.083 (trail=0.4) | WFE 1.222 |
+  P(ruin) 0.0% | Max DD p95 0.5% | PnL median $1,169/6m en $10k | ~88 trades/6m OOS.
+  Mas debil que NY ORB (PF 4.083 vs 4.471, menor PnL median) pero consistente.
+  Puede combinarse con NY ORB en mismo par — sesiones distintas, sin solapamiento.
+  Si se combinan ambas USDCAD ORBs, reducir cada una a risk=0.002 para controlar
+  exposicion total al par.
+notes: >
+  IS 2023-2025: PF 2.78 (trail=0.5), WR 52.5%, 337 trades, 20/24 meses profitable.
+  WF trail=0.4 2022-2026: OOS 6/6, avg PF 4.083, WFE 1.222, DD p95 0.5%.
+  W2 WFE marginalmente bajo (0.477) — punto menor.
+  Trail sweep: 0.4 (PF 4.083) > 0.5 (PF 2.701).
+  Priorizar NY ORB si solo se puede añadir una estrategia USDCAD — mayor PF y PnL median.

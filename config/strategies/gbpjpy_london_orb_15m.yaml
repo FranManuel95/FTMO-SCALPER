@@ -1,0 +1,47 @@
+name: GBPJPY London Open ORB 15M + Trail
+symbol: GBPJPY
+strategy: london_orb
+timeframe: 15m
+hypothesis: >
+  Rango London Open 07:00-08:00 UTC en GBPJPY 15M. Breakout entry 08:00-12:00 UTC
+  en direccion H4 trend, ADX>18, trail 0.4xATR. GBP es el motor principal en la
+  sesion London — el breakout captura el impulso institucional del cruce GBP/JPY
+  sin estar expuesto a los shocks nocturnos del BoJ. Clave: las posiciones se abren
+  DESPUES de que el BoJ actua (02:00-07:00 UTC) y cierran en 30-45 minutos (mediana
+  2 velas 15M) — el riesgo de gap overnight es estructuralmente eliminado.
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.4
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: >
+  PASS — ROBUSTA. OOS 6/6 | PF medio OOS 5.282 (trail=0.4) | WFE 1.073 |
+  P(ruin) 0.0% | Max DD p95 0.4% | PnL median ~$1,450/6m en $10k | ~87 trades/6m.
+  Trail sweep: 0.3 (PF 9.242, margen 4.1 pip/2.1x spread, borderline) > 0.4 (PF 5.282,
+  5.5 pip/2.8x, sweet spot) > 0.5 (PF 3.522, 6.9 pip/3.4x, seguro).
+  BoJ gap risk NEUTRALIZADO: entrada 08:00 UTC, salida mediana 08:30 UTC (2 velas).
+  BoJ actua 02:00-07:00 UTC — ya incorporado en el rango 07:00-08:00 UTC.
+  REGLA OPERACIONAL: no operar en dias de reunion BoJ (~8 dias/año) como precaucion adicional.
+notes: >
+  IS 2023-2025: PF 3.42 (trail=0.5), WR 57.8%, 332 trades, 24/24 meses profitable.
+  WF trail=0.4 2022-2026: OOS 6/6, avg PF 5.282, WFE 1.073, DD p95 0.4%.
+  Todas las ventanas OOS PF > 2.8 — consistencia excepcional.
+  Duracion media posicion: 2 velas 15M = 30 min. Max: 3 velas = 45 min. Zero overnight.
+  LONG-only pullback 1H: 5/6 OOS pero WFE 0.199, W5 PF 0.331 — RECHAZADO.
+  Bidirectional pullback: 4/6 OOS — RECHAZADO.
+  El ORB es el approach correcto para GBPJPY.
