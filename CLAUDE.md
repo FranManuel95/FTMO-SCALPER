@@ -124,6 +124,23 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **RR=4.0 tested but rejected:** OOS PF 1.368 (+marginal) but P(ruin) spikes to 9.4%, Max DD p95=11.5% (>FTMO limit). Keep RR=2.5.
 - **NY ORB on other pairs:** No edge. EURUSD, USDJPY, GBPUSD, GBPJPY, EURJPY all inconsistent year-by-year. XAUUSD-only strategy.
 
+### ✅ London Open ORB + Trail — VALIDADA (`src/signals/breakout/london_open_breakout.py`)
+
+- **Asset/TF:** XAUUSD 15m
+- **Logic:** Range 07:00-08:00 UTC (09:00-10:00 broker). Breakout entry 08:00-12:00 UTC. ADX > 18. Trail 0.5×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.5`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.907**, P(ruin) **0.0%**, Max DD p95 **0.5%**
+- **FTMO viability:** ~€180/mes en €10k. PnL median $1.079 sobre 6 meses.
+- **Clave:** Con fixed TP era FROZEN (IS PF=1.017). Trail 0.5×ATR la rescató completamente — los false breakouts de Londres se convierten en pequeñas ganancias en vez de -1R.
+
+### ✅ GBPUSD Pullback 1H + Trail — VALIDADA (`src/signals/pullback/trend_pullback.py`)
+
+- **Asset/TF:** GBPUSD 1h
+- **Logic:** EMA20 pullback en estructura alcista, ADX>25, filtro H4 trend. Trail 0.5×ATR.
+- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.004`, `exit_mode=trail`, `trail_atr_mult=0.5`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.817**, P(ruin) **0.0%**, Max DD p95 **1.9%**
+- **FTMO viability:** ~€180/mes en €10k. Driver macro: BoE vs Fed.
+
 ### ❌ London Breakout (`src/signals/breakout/london_breakout.py`)
 
 - **Asset/TF:** XAUUSD 15m
@@ -169,7 +186,10 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **XAUUSD 15M pullback:** FAIL — misma dependencia de régimen que 1H (2023 PF ~0.90 arrastra IS a ~1.06). Más señales no compensan la misma exposición al régimen.
 - **EURGBP mean reversion:** FAIL — régimen-dependiente: 2021-2022 PF>1.5, 2023 PF=0.829, 2024 PF=1.53, 2025 PF=1.03. Sin consistencia inter-año.
 - **XAUUSD mean reversion 1H:** FAIL — no es complementaria al pullback. Falla en 2022 (gold cayendo por hikes Fed) al igual que el pullback. LONG-only tampoco ayuda: 2022 PF=0.696.
-- **London Breakout 15M:** FAIL Gate 1 con IS 2022-2025 (PF 0.97, DD 12.8%). Solo funciona en bull run (2024), mismo régimen que pullback.
+- **London Breakout 15M (Asian range):** FAIL Gate 1 con IS 2022-2025 (PF 0.97, DD 12.8%). Diferente a London Open ORB — rango asiático, no rango London.
+- **London Open ORB 15M con trail 0.5×ATR:** PASS 6/6. Con fixed TP era FROZEN (PF=1.017). Trail lo rescata → PF 2.907, DD p95 0.5%. El trail convierte false breakouts en pequeñas ganancias.
+- **GBPUSD Pullback 1H con trail 0.5×ATR:** PASS 6/6, PF 2.817, DD p95 1.9%. Driver BoE vs Fed. Misma lógica EMA20 que XAUUSD.
+- **XAUUSD Pullback 4H:** FAIL Gate 1 (IS PF=1.030). Pocas señales en 4H durante 2022-2023 (ranging) arrastra el IS.
 - **NY Open ORB 15M con trail 0.5×ATR:** WF 6/6 OOS, avg PF 4.205, Max DD p95 0.6%, P(ruin) 0.0%. El trail captura el impulso inicial del CME open — incluso breakouts fallidos dan pequeñas ganancias. Fixed TP baseline (1.345) era delgado; trail lo transforma en edge sólido. RR=4.0 testado y rechazado (P(ruin)=9.4%).
 - **Trail ATR sweep completo (todas las estrategias):** PF aumenta monotónicamente al apretar el trail. Sweet spots por estrategia: XAUUSD Pullback 1H → trail=0.3 (PF OOS 5.546, 6/6, margen $3.60 > spread $0.40); USDJPY Pullback 1H → trail=0.2 (PF OOS 2.515, 6/6, spread JPY irrelevante); NY ORB 15M → trail=0.5 (trail=0.3 teórico da PF 9.216 pero margen $1.20 ≈ spread en noticias). La lógica: `trail_sl = bar["high"] - atr * mult`. Implementado en `run_backtest.py` exit_mode="trail".
 - **Partial TP (50% a 1.5R) resultó PEOR:** Recorta ganadores antes de tiempo. El precio que llega a 1.5R tiende a continuar a 2.5R. Fixed o trail son mejores que partial.

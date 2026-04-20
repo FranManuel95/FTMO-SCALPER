@@ -4,8 +4,8 @@ strategy: london_open
 timeframe: 15m
 hypothesis: 'Revisita London ORB frozen (IS PF=1.017 con fixed TP). El NY ORB tenia
   PF=1.345 con fixed y paso a 4.205 con trail=0.5. El London ORB falla porque los
-  breakouts son falsos y revierten — exactamente el caso donde el trail convierte -1R
-  en +0.3R. Hipotesis: trail rescata la estrategia igual que hizo con NY ORB.'
+  breakouts son falsos y revierten — exactamente el caso donde el trail convierte
+  -1R en +0.3R. Hipotesis: trail rescata la estrategia igual que hizo con NY ORB.'
 params:
   adx_min: 18
   rr_target: 2.5
@@ -25,5 +25,5 @@ gates:
   max_dd_pct: 0.1
   min_trades: 30
   max_is_oos_degradation: 0.35
-status: pending
-verdict: ''
+status: validated
+verdict: PASS — ESTRATEGIA ROBUSTA | OOS 100% profitable | PF 2.907 | P(profit) 100.0%
