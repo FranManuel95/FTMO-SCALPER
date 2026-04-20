@@ -121,6 +121,30 @@ def run_backtest(
         print(f"[signals] MeanReversion BB({mr_cfg.bb_period},{mr_cfg.bb_std}) | RSI oversold<{mr_cfg.rsi_oversold} overbought>{mr_cfg.rsi_overbought} | ADX<{mr_cfg.adx_max} | RR {mr_cfg.rr_target}")
         signals = generate_bb_reversion_signals(df, mr_cfg)
         diag_rows = []
+    elif strategy == "fvg":
+        from src.signals.fvg.fair_value_gap import FVGConfig, generate_fvg_signals
+        fvg_kwargs: dict = dict(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        if adx_min is not None:
+            fvg_kwargs["adx_min"] = adx_min
+        if rr_target is not None:
+            fvg_kwargs["rr_target"] = rr_target
+        fvg_cfg = FVGConfig(**fvg_kwargs)
+        print(f"[signals] FVG | ADX>{fvg_cfg.adx_min} | H4 trend {'ON' if htf_trend else 'OFF'} | RR {fvg_cfg.rr_target} | maxBars {fvg_cfg.max_bars_to_fill}")
+        signals = generate_fvg_signals(df, fvg_cfg)
+        diag_rows = []
+    elif strategy == "ny_breakout":
+        from src.signals.breakout.ny_open_breakout import NYOpenBreakoutConfig, generate_ny_open_breakout_signals
+        ny_kwargs: dict = dict(tz_offset_hours=tz_offset, htf_trend_enabled=htf_trend)
+        if adx_min is not None:
+            ny_kwargs["adx_min"] = adx_min
+        if rr_target is not None:
+            ny_kwargs["rr_target"] = rr_target
+        ny_cfg = NYOpenBreakoutConfig(**ny_kwargs)
+        rng_s = f"{ny_cfg.range_start_utc:02d}:{ny_cfg.range_start_min:02d}"
+        rng_e = f"{ny_cfg.range_end_utc:02d}:{ny_cfg.range_end_min:02d}"
+        print(f"[signals] NY ORB | Range {rng_s}-{rng_e} UTC | ADX>{ny_cfg.adx_min} | H4 trend {'ON' if htf_trend else 'OFF'} | RR {ny_cfg.rr_target}")
+        signals = generate_ny_open_breakout_signals(df, ny_cfg)
+        diag_rows = []
     else:
         raise ValueError(f"Estrategia desconocida: {strategy}")
 

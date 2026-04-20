@@ -1,0 +1,30 @@
+name: XAUUSD NY Open Breakout 15m
+symbol: XAUUSD
+strategy: ny_breakout
+timeframe: 15m
+hypothesis: 'El NY Open (13:30 UTC = 15:30 broker) es el punto de mayor liquidez para
+  XAUUSD: London+NY se solapan y el mercado de futuros de CME inicia. Se construye
+  el rango de la primera hora de apertura NY (15:00-16:00 broker), luego se opera
+  el breakout en direccion del trend H4. A diferencia del London Breakout (rango asiatico
+  7h), este rango es mas compacto y el momento del breakout coincide con el mayor
+  volumen institucional. Sin dependencia de regimen: funciona en bull y en laterales
+  porque captura el momentum de sesion NY independientemente del trend macro.'
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: CONDITIONAL — Edge presente pero delgado | OOS 83% | PF 1.345
