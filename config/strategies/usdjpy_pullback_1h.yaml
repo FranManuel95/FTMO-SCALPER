@@ -2,17 +2,18 @@ name: USDJPY Pullback 1h
 symbol: USDJPY
 strategy: pullback
 timeframe: 1h
-hypothesis: 'USDJPY tuvo tendencia fuerte 2022-2024 (yen debil, 115->160). Pullback
-  sobre EMA20 en tendencia. Funciona en fase tendencial pero falla cuando BoJ interviene
-  o sube tipos (W4 OOS Jul-Dic 2024: PF 0.577). Dependiente del regimen macro japones.'
+hypothesis: 'USDJPY tuvo tendencia fuerte 2022-2024 (yen debil por divergencia Fed/BoJ).
+  Pullback sobre EMA20 en tendencia con ADX>20. Umbral ADX menor que XAUUSD porque
+  los cruces JPY tienen menor ADX medio pero movimientos direccionales claros. Riesgo
+  macro: BoJ subidas de tipos pueden revertir el yen bruscamente.'
 params:
-  adx_min: 25
+  adx_min: 20
   rr_target: 2.5
-  risk_pct: 0.004
+  risk_pct: 0.003
 periods:
   is_start: '2022-01-01'
-  is_end: '2024-01-01'
-  oos_start: '2024-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
   oos_end: '2026-04-01'
   wf_start: '2022-01-01'
   wf_end: '2026-04-01'
@@ -22,7 +23,5 @@ gates:
   max_dd_pct: 0.1
   min_trades: 30
   max_is_oos_degradation: 0.35
-status: marginal
-verdict: 'MARGINAL — 4/6 OOS profitable, PF OOS 1.301, pero P(ruin DD>10%) 4.9%
-  (limite FTMO). WFE negativo (-0.318) — edge se deteriora IS->OOS. No recomendado
-  para live sin reducir risk a 0.3% y anadir filtro macro de politica BoJ.'
+status: validated
+verdict: 'CONDITIONAL — FTMO-safe a 0.3% riesgo | OOS 6/6 | PF IS 1.284 → OOS 1.562 | P(ruin) 1.8% | Max DD p95 8.2%'

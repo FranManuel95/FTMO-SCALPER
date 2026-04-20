@@ -1,0 +1,28 @@
+name: XAUUSD Pullback 15m
+symbol: XAUUSD
+strategy: pullback
+timeframe: 15m
+hypothesis: 'Misma logica EMA20 pullback que la version 1H pero en 15M para mayor
+  frecuencia de senales. Hipotesis: mas trades = mas rapido completar FTMO challenge.
+  Mismos filtros H4 trend y ADX.'
+params:
+  adx_min: 25
+  rr_target: 2.5
+  risk_pct: 0.004
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: frozen
+verdict: 'FAIL — misma dependencia de regimen que 1H sin beneficio de diversificacion.
+  2022 PF=1.124, 2023 PF=0.899, 2024 PF=1.147, 2025 PF=1.758. IS 2022-2025 no pasa
+  Gate 1 (2023 arrastra el PF a ~1.06). Mas ruido en 15M sin edge adicional.'

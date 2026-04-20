@@ -1,0 +1,28 @@
+name: EURJPY Pullback 1h
+symbol: EURJPY
+strategy: pullback
+timeframe: 1h
+hypothesis: 'EURJPY combina dos drivers direccionales: EUR alcista (macro Europa post-COVID)
+  + JPY debil (BoJ sin subir tipos hasta 2024). La tendencia 2022-2024 fue mas fuerte
+  que USDJPY porque ambas monedas se movian en la misma direccion. Pullback EMA20
+  en estructura alcista con ADX>22. Riesgo: posibles reversiones brutas del yen en
+  noticias BoJ.'
+params:
+  adx_min: 22
+  rr_target: 2.5
+  risk_pct: 0.003
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: frozen
+verdict: FAIL en Gate 1 (IS) — edge insuficiente o DD excesivo en muestra

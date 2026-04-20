@@ -32,7 +32,8 @@ gates:
   max_dd_pct: 0.1
   min_trades: 30
   max_is_oos_degradation: 0.35
-status: pending
-verdict: 'PENDIENTE — XAUUSD CSV no disponible en entorno actual. Hipótesis: complementaria
-  al pullback (funciona en régimen lateral cuando pullback falla). Testar cuando datos
-  XAUUSD_1H.csv estén disponibles.'
+status: frozen
+verdict: 'FAIL — Testeado con datos disponibles. LONG-only y LONG+SHORT ambos fallan
+  en 2022 (gold cayendo por hikes Fed) igual que el pullback. No es complementaria:
+  misma dependencia de regimen. 2022 LONG-only PF=0.696, 2023 PF=1.053, 2024 PF=1.445,
+  2025 PF=1.155. IS 2022-2024 no pasa Gate 1.'

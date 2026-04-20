@@ -76,7 +76,7 @@ MT5 CSVs go in `backtest/data/` (primary) or `data/raw/` (fallback). Naming conv
 
 For combined strategies (15m + 1h), both CSVs must be present. Exits are always simulated on 15m data for higher resolution.
 
-**Available CSV data (as of research):** `XAUUSD_1H.csv`, `XAUUSD_M15.csv`, `EURUSD_H1.csv` covering 2022–2025.
+**Available CSV data (as of research):** XAUUSD, EURUSD, USDJPY, EURJPY, GBPJPY, GBPUSD, AUDUSD, NZDUSD, USDCAD, USDCHF, EURGBP — todos en 1H (+ 15M/4H/1D para la mayoría). Cobertura: 2022–2026-04. Los CSVs en `backtest/data/` están en UTC+2 (hora broker MT5).
 
 ## Indicator Library
 
@@ -99,12 +99,16 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 
 ### ✅ Trend Pullback — VALIDADA (`src/signals/pullback/trend_pullback.py`)
 
-- **Asset/TF:** XAUUSD 1h — **ÚNICA ESTRATEGIA VALIDADA**
-- **Logic:** Price above EMA50 + EMA20 > EMA50 (bullish structure); pullback below EMA20 then close back above it; RSI < 60; ADX > threshold
-- **Key filters:** H4 trend (EMA50 > EMA200 on H4 resample), session 09:00–23:00 broker time
+**XAUUSD 1H — ESTRATEGIA PRINCIPAL**
 - **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.004`
-- **Walk-forward results (2022–2026, 6 windows):** 5/6 OOS profitable, avg OOS PF 1.905, P(profit) 99.8%, P(DD>10%) 0.5%, Max DD p95 7.0%
-- **FTMO viability:** Safe at 0.4% risk. ~4–5 trades/month; ~12–15 months para +10% target en condiciones favorables.
+- **Walk-forward (2022–2026, 6 windows):** 5/6 OOS profitable, avg OOS PF 1.905, P(profit) 99.8%, P(DD>10%) 0.5%, Max DD p95 7.0%
+- **FTMO viability:** Safe at 0.4% risk. ~4–5 trades/month.
+
+**USDJPY 1H — ESTRATEGIA SECUNDARIA (CONDITIONAL)**
+- **Best parameters:** `adx_min=20`, `rr_target=2.5`, `risk_pct=0.003` ← 0.3% para FTMO safety
+- **Walk-forward (2022–2026, 6 windows):** 6/6 OOS profitable, avg OOS PF 1.362, P(profit) 96.5%, P(DD>10%) 1.8%, Max DD p95 8.2%
+- **FTMO viability:** Safe only at 0.3% risk (at 0.4% risk P(ruin)=7.6% — too high). Edge delgado, driver macro (JPY divergencia BoJ/Fed) puede agotarse.
+- **Logic:** Same EMA20 pullback as XAUUSD but ADX threshold lowered to 20 (JPY crosses have lower ADX naturally). Both LONG and SHORT signals generated.
 
 ### ❌ London Breakout (`src/signals/breakout/london_breakout.py`)
 
@@ -147,7 +151,10 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD is not a trending instrument in the same way as XAUUSD.
 - **EURUSD mean reversion:** Régimen-dependiente. Con datos correctos (UTC+2): 2022 PF 0.67, 2023 PF 1.01, 2024 PF 1.80, 2025 PF 0.19. Sin consistencia entre años. El buen resultado de 2023 previo (PF 4.6) era un artefacto del CSV UTC mal interpretado como UTC+2.
 - **XAUUSD mean reversion:** WR ~27% en todos los años. No complementario al pullback — fallan juntos.
-- **Multi-par scan (pullback):** Solo USDJPY muestra algo (PF OOS 1.30) pero P(ruin) 4.9% — peligroso para FTMO. Todos los demás pares sin edge.
+- **Multi-par scan completo (pullback):** USDJPY CONDITIONAL (validado a 0.3% riesgo). EURJPY FAIL Gate 1 (PF 1.004). GBPJPY FAIL Gate 2 (OOS PF 0.990 — BoJ hikes revirtieron el trade). AUDUSD FAIL (avg PF ~0.88, sin driver direccional). USDCAD FAIL (avg PF ~0.91, fuerzas USD+CAD se cancelan). El edge EMA pullback es específico de pares con driver macro unidireccional fuerte.
+- **XAUUSD 15M pullback:** FAIL — misma dependencia de régimen que 1H (2023 PF ~0.90 arrastra IS a ~1.06). Más señales no compensan la misma exposición al régimen.
+- **EURGBP mean reversion:** FAIL — régimen-dependiente: 2021-2022 PF>1.5, 2023 PF=0.829, 2024 PF=1.53, 2025 PF=1.03. Sin consistencia inter-año.
+- **XAUUSD mean reversion 1H:** FAIL — no es complementaria al pullback. Falla en 2022 (gold cayendo por hikes Fed) al igual que el pullback. LONG-only tampoco ayuda: 2022 PF=0.696.
 - **London Breakout 15M:** FAIL Gate 1 con IS 2022-2025 (PF 0.97, DD 12.8%). Solo funciona en bull run (2024), mismo régimen que pullback.
 - **Data timezone:** CSVs en backtest/data/ usan UTC+2 (hora broker MT5). El sistema usa tz_offset_hours=2 para ser consistente. Nunca mezclar con CSVs UTC-naive de data/raw/.
 - **run_research_loop bug fixed:** Mean reversion params (rsi_oversold, rsi_overbought, bb_std) were not passed from YAML → run_backtest → BBReversionConfig. Fixed.

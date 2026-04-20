@@ -1,0 +1,26 @@
+name: AUDUSD Pullback 1h
+symbol: AUDUSD
+strategy: pullback
+timeframe: 1h
+hypothesis: 'AUDUSD tiene algo de tendencia por correlacion con commodities/China pero
+  es fundamentalmente un par de rango. Testado rapidamente para confirmar/descartar.'
+params:
+  adx_min: 22
+  rr_target: 2.5
+  risk_pct: 0.003
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: frozen
+verdict: 'FAIL — sin edge: 2022 PF=1.382, 2023 PF=0.880, 2024 PF=0.787, 2025 PF=0.551.
+  PF medio ~0.88. No tiene driver macro unidireccional sostenido.'

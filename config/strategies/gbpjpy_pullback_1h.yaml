@@ -1,0 +1,27 @@
+name: GBPJPY Pullback 1h
+symbol: GBPJPY
+strategy: pullback
+timeframe: 1h
+hypothesis: 'GBPJPY es el par JPY cruzado mas volatil (apodado "la bestia"). Tendencia
+  alcista fuerte 2022-2024: GBP se recupero post-Brexit + JPY debil por BoJ. ADX>22
+  para filtrar tendencia. Riesgo: reversiones brutales del yen en eventos BoJ, gap
+  risk elevado. Se usa riesgo conservador 0.3% dado el DD potencial.'
+params:
+  adx_min: 22
+  rr_target: 2.5
+  risk_pct: 0.003
+periods:
+  is_start: '2022-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.2
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: frozen
+verdict: FAIL en Gate 2 (OOS) — edge no se mantiene fuera de muestra
