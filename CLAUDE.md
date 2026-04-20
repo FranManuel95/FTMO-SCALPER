@@ -133,6 +133,32 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **FTMO viability:** ~€180/mes en €10k. PnL median $1.079 sobre 6 meses.
 - **Clave:** Con fixed TP era FROZEN (IS PF=1.017). Trail 0.5×ATR la rescató completamente — los false breakouts de Londres se convierten en pequeñas ganancias en vez de -1R.
 
+### ✅ USDJPY Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** USDJPY 1h
+- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.5×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.5`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **3.219**, P(ruin) **0.0%**, Max DD p95 **0.7%**, WFE **1.357**
+- **FTMO viability:** ~€630/6m en €10k. WFE > 1 indica que OOS supera IS — robustez genuina. Complementario al USDJPY Pullback 1H.
+
+### ✅ NZDUSD Pullback 1H + Trail — CONDITIONAL PASS (`src/signals/pullback/trend_pullback.py`)
+
+- **Asset/TF:** NZDUSD 1h
+- **Logic:** EMA20 pullback, ADX > 25, H4 trend. Trail 0.5×ATR. Misma lógica que XAUUSD/GBPUSD.
+- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.5`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.055**, P(ruin) **0.0%**, Max DD p95 **2.2%**
+- **Caveats:** Frecuencia baja (~20-30 trades/ventana). W2 y W3 OOS PF rozaron 1.0. Riesgo macro RBNZ similar a BoJ. Viable a 0.3% riesgo con vigilancia.
+
+### ❌ FVG XAUUSD 1H (`src/signals/fvg/fair_value_gap.py`)
+
+- **Asset/TF:** XAUUSD 1h
+- **Logic:** Imbalance de 3 velas (Fair Value Gap). Entry cuando precio retrocede a zona FVG. ADX > 20, H4 trend.
+- **Result:** MARGINAL — 6/6 OOS, avg PF 1.315, pero Max DD p95 = **10.1%** roza límite FTMO. P(ruin) 5.2%. No viable standalone. Posible diversificador a 0.2% riesgo por su alta frecuencia (~140 señales/6m).
+
+### ❌ AUDUSD Pullback 1H + Trail
+
+- **Result:** FAIL — 4/6 OOS (2 ventanas perdedoras). WFE 0.433 < 0.5. Trail mejoró PF de 0.88 a 1.51 IS pero sin driver macro unidireccional (RBA vs Fed se cancelan). Descartado.
+
 ### ✅ GBPUSD Pullback 1H + Trail — VALIDADA (`src/signals/pullback/trend_pullback.py`)
 
 - **Asset/TF:** GBPUSD 1h

@@ -323,7 +323,7 @@ def run_validation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Walk-forward + Monte Carlo validation")
     parser.add_argument("--symbol",    default="XAUUSD")
-    parser.add_argument("--strategy",  default="pullback", choices=["breakout", "pullback", "combined", "mean_reversion", "fvg", "ny_breakout"])
+    parser.add_argument("--strategy",  default="pullback", choices=["breakout", "pullback", "combined", "mean_reversion", "fvg", "ny_breakout", "asian_orb"])
     parser.add_argument("--timeframe", default="1h")
     parser.add_argument("--start",     default="2022-01-01")
     parser.add_argument("--end",       default="2025-01-01")
