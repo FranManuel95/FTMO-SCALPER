@@ -118,6 +118,47 @@ def build_default_portfolio() -> list[StrategyConfig]:
     ]
 
 
+# ── Diagnóstico ────────────────────────────────────────────────────────────────
+
+def _run_check(client, strategies: list, notifier) -> None:
+    """Verifica conexión MT5, datos y generators. Reporta a Telegram y consola."""
+    from src.live.live_data_loader import LiveDataLoader
+    logger = logging.getLogger(__name__)
+
+    lines = []
+    ok = True
+
+    # 1. Conexión MT5
+    balance = client.account_balance()
+    equity = client.account_equity()
+    lines.append(f"✅ MT5 conectado | Balance {balance:.2f} | Equity {equity:.2f}")
+
+    # 2. Datos + generators por estrategia
+    loader = LiveDataLoader(client)
+    for cfg in strategies:
+        try:
+            df = loader.get_closed_bars(cfg.symbol, cfg.timeframe, cfg.bars_to_fetch)
+            n_bars = len(df)
+            last_bar = df.index[-1].strftime("%Y-%m-%d %H:%M UTC")
+            try:
+                signals = cfg.generator(df)
+                sig_txt = f"{len(signals)} señal(es)" if signals else "sin señal (normal)"
+            except Exception as e:
+                sig_txt = f"⚠️ generator error: {e}"
+                ok = False
+            lines.append(f"✅ {cfg.strategy_id}: {n_bars} barras | última {last_bar} | {sig_txt}")
+        except Exception as e:
+            lines.append(f"❌ {cfg.strategy_id}: ERROR fetching bars — {e}")
+            ok = False
+
+    # 3. Telegram
+    lines.append(f"\n{'✅ Todo OK — listo para operar' if ok else '⚠️ Hay errores arriba, revisar'}")
+
+    report = "\n".join(lines)
+    print(report)
+    notifier.on_heartbeat("📊 Diagnóstico completo\n\n" + report)
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> int:
@@ -135,6 +176,8 @@ def main() -> int:
                         help="Intervalo entre iteraciones (default 30s)")
     parser.add_argument("--once", action="store_true",
                         help="Ejecuta una sola iteración y sale (tests)")
+    parser.add_argument("--check", action="store_true",
+                        help="Diagnóstico completo: conexión, datos, generators — sin operar")
     parser.add_argument("--no-telegram", action="store_true",
                         help="Desactiva notificaciones Telegram aunque haya env vars")
     args = parser.parse_args()
@@ -168,7 +211,9 @@ def main() -> int:
         notifier=notifier,
     )
 
-    if args.once:
+    if args.check:
+        _run_check(client, build_default_portfolio(), notifier)
+    elif args.once:
         runner.tick()
     else:
         runner.run_forever()
