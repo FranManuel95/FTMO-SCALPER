@@ -60,6 +60,7 @@ def run_backtest(
     exit_mode: str = "fixed",        # "fixed" | "partial" | "trail"
     partial_tp_r: float = 1.5,       # first TP level (in R multiples) for "partial"
     trail_atr_mult: float = 1.0,     # ATR multiplier for trailing stop
+    long_only: bool = False,         # only generate LONG signals (pullback strategy)
 ) -> dict:
     setup_logging()
 
@@ -99,6 +100,8 @@ def run_backtest(
             pb_kwargs["daily_adx_min"] = daily_adx_min
         if weekly_regime:
             pb_kwargs["weekly_regime_enabled"] = True
+        if long_only:
+            pb_kwargs["long_only"] = True
         pb_cfg = TrendPullbackConfig(**pb_kwargs)
         s_start = (7 + tz_offset) % 24
         s_end = (21 + tz_offset) % 24
@@ -381,6 +384,7 @@ if __name__ == "__main__":
     parser.add_argument("--exit-mode", default="fixed", choices=["fixed", "partial", "trail"], help="Modo de salida: fixed | partial | trail")
     parser.add_argument("--partial-tp-r", type=float, default=1.5, help="R para el primer TP parcial (default: 1.5)")
     parser.add_argument("--trail-atr-mult", type=float, default=1.0, help="Multiplicador ATR para trailing stop (default: 1.0)")
+    parser.add_argument("--long-only", action="store_true", help="Solo señales LONG (pullback strategy)")
     args = parser.parse_args()
 
     results = run_backtest(
@@ -389,5 +393,6 @@ if __name__ == "__main__":
         args.tz_offset, not args.no_htf, args.diagnostic, args.research,
         args.adx_min, args.rr_target, args.daily_adx_min, args.weekly_regime,
         exit_mode=args.exit_mode, partial_tp_r=args.partial_tp_r, trail_atr_mult=args.trail_atr_mult,
+        long_only=args.long_only,
     )
     print(json.dumps(results, indent=2, default=str))

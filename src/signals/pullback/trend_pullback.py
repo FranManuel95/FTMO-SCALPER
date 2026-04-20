@@ -33,6 +33,8 @@ class TrendPullbackConfig:
     weekly_ema_period: int = 50
     # Filtro de régimen diario: EMA50 vs EMA200 daily (golden/death cross)
     daily_trend_enabled: bool = False
+    # Solo operar en dirección larga (elimina shorts)
+    long_only: bool = False
 
 
 def generate_pullback_signals(
@@ -161,6 +163,8 @@ def generate_pullback_signals(
                 signals_today[day_key] = signals_today.get(day_key, 0) + 1
 
         elif bearish:
+            if config.long_only:
+                continue
             pullback = prev_close > ema_f[i - 1] and close < ema_f[i]
             rsi_ok = rsi_arr[i] > config.rsi_oversold
             if pullback and rsi_ok:

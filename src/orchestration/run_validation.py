@@ -150,6 +150,7 @@ def run_validation(
     bb_std: float | None = None,
     exit_mode: str = "fixed",
     trail_atr_mult: float = 1.0,
+    long_only: bool = False,
 ) -> dict:
     setup_logging()
 
@@ -185,6 +186,7 @@ def run_validation(
             research=True, adx_min=adx_min, rr_target=rr_target,
             rsi_oversold=rsi_oversold, rsi_overbought=rsi_overbought,
             bb_std=bb_std, exit_mode=exit_mode, trail_atr_mult=trail_atr_mult,
+            long_only=long_only,
         )
         def _run(start, end):
             return run_backtest(start=start, end=end, **bt_kwargs)
@@ -336,6 +338,7 @@ if __name__ == "__main__":
     parser.add_argument("--mc-sims",   type=int,   default=5000)
     parser.add_argument("--exit-mode", default="fixed", choices=["fixed", "partial", "trail"])
     parser.add_argument("--trail-atr-mult", type=float, default=1.0)
+    parser.add_argument("--long-only", action="store_true", help="Solo señales LONG (pullback strategy)")
     args = parser.parse_args()
 
     run_validation(
@@ -344,4 +347,5 @@ if __name__ == "__main__":
         adx_min=args.adx_min, rr_target=args.rr_target,
         is_months=args.is_months, oos_months=args.oos_months, step_months=args.step,
         n_mc=args.mc_sims, exit_mode=args.exit_mode, trail_atr_mult=args.trail_atr_mult,
+        long_only=args.long_only,
     )
