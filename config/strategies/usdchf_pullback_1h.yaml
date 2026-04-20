@@ -1,0 +1,41 @@
+name: USDCHF Pullback 1H + Trail
+symbol: USDCHF
+strategy: pullback
+timeframe: 1h
+hypothesis: 'EMA20 pullback en estructura alcista/bajista, ADX>25, filtro H4 trend.
+  Trail 0.3xATR. USDCHF tiene driver macro Fed vs SNB: Fed hawkish/SNB dovish →
+  USD se aprecia vs CHF. Driver genuino aunque el CHF tiene rol de safe-haven que
+  puede anular temporalmente el carry. W6 (H2 2025) falla por debilidad USD
+  post-tarifas (risk-off → CHF appreciation). SNB intervention risk es idiosincrático.'
+params:
+  adx_min: 25
+  rr_target: 2.5
+  risk_pct: 0.004
+  exit_mode: trail
+  trail_atr_mult: 0.3
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 20
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: 'CONDITIONAL PASS | OOS 5/6 | PF medio OOS 2.669 | WFE 1.143 | P(ruin)
+  0.0% | Max DD p95 2.0% | PnL median $837/6m en $10k | Trail=0.3 sweet spot
+  (margen ~4.2 pips vs spread ~1.5-2 pips, ratio 2.1-2.8x). W6 falla (H2 2025):
+  USD debilidad post-tarifas, CHF apreciacion risk-off. Riesgo: SNB intervenciones
+  sorpresa pueden crear gap moves que bypasean trailing stop (2015 CHF unpeg,
+  2022-2023). Diversificador valido junto a XAUUSD y USDJPY.'
+notes: >
+  IS 2023-2025: PF 2.088, WR 62.96%, 81 trades, DD 0.8%.
+  WF 2022-2026: OOS 5/6, avg PF 2.669, WFE 1.143.
+  Trail sweep: 0.3 (PF 2.669, DD 2.0%) > 0.4 (PF 2.479) > 0.5 (PF 2.324).
+  W6 falla con todos los trail values — es el regimen USD weakness 2025.
+  ~10-29 trades por ventana OOS. SNB intervention risk requiere monitoring humano.

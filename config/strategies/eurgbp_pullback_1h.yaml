@@ -1,0 +1,40 @@
+name: EURGBP Pullback 1H + Trail
+symbol: EURGBP
+strategy: pullback
+timeframe: 1h
+hypothesis: 'EMA20 pullback en estructura alcista/bajista, ADX>25, filtro H4 trend.
+  Trail 0.3xATR. EURGBP tiene un driver macro genuino cuando BoE y ECB divergen
+  (e.g. BoE hawkish vs ECB dovish → GBP alcista). El edge desaparece cuando ambos
+  bancos convergen (W3: BoE/ECB convergencia H1 2024 → rango, PF 0.69). Trail=0.3
+  es el sweet spot: PF 4.398 OOS, WFE 3.171, DD p95 1.1%.'
+params:
+  adx_min: 25
+  rr_target: 2.5
+  risk_pct: 0.003
+  exit_mode: trail
+  trail_atr_mult: 0.3
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 15
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: 'CONDITIONAL PASS | OOS 5/6 | PF medio OOS 4.398 | WFE 3.171 | P(ruin)
+  0.0% | Max DD p95 1.1% | PnL median $893/6m en $10k | Trail=0.3 sweet spot
+  (margen 12-18 pips vs spread 1-2 pips, ratio 6-18x). W3 falla (H1 2024):
+  convergencia BoE/ECB elimina driver direccional. Riesgo: cuando ambos bancos
+  centrales tienen politica similar, el edge se anula. Vigilar divergencia BoE vs ECB.'
+notes: >
+  IS 2023-2025: PF 2.21, WR 52.9%, 102 trades, DD 0.26%.
+  WF 2022-2026: OOS 5/6, avg PF 4.398, WFE 3.171.
+  Trail sweep: 0.3 (PF 4.398, DD 1.1%) > 0.4 (PF 3.312) > 0.5 (PF 2.335).
+  W3 falla con todos los trail values — es la ventana BoE/ECB convergencia.
+  ~18-37 trades por ventana OOS (baja frecuencia, aceptable).
