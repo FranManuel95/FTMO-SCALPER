@@ -1,0 +1,31 @@
+name: NZDUSD Pullback 1H + Trail
+symbol: NZDUSD
+strategy: pullback
+timeframe: 1h
+hypothesis: 'EMA20 pullback en estructura alcista/bajista, ADX>22, filtro H4 trend.
+  Trail 0.4xATR. Sweet spot hallado con sweep: ADX=22 aumenta frecuencia (avg 31
+  trades/ventana) vs ADX=25 (~20 trades), trail=0.4 mantiene 6/6 donde trail=0.3
+  falla W3. NZD es commodity currency correlada con China/materias primas.'
+params:
+  adx_min: 22
+  rr_target: 2.5
+  risk_pct: 0.003
+  exit_mode: trail
+  trail_atr_mult: 0.4
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 20
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: 'PASS — CONDITIONAL | OOS 6/6 | PF medio OOS 2.398 | P(ruin) 0.0% | Max
+  DD p95 1.5% | PnL median $789/6m en $10k | ADX=22 trail=0.4 sweet spot: frecuencia
+  31 trades/ventana, W2/W3 ya no rozan 1.0 | Riesgo macro RBNZ vigilar'

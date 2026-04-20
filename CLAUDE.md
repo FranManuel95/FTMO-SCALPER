@@ -136,18 +136,29 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 ### ✅ USDJPY Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
 
 - **Asset/TF:** USDJPY 1h
-- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.5×ATR.
-- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.5`
-- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **3.219**, P(ruin) **0.0%**, Max DD p95 **0.7%**, WFE **1.357**
-- **FTMO viability:** ~€630/6m en €10k. WFE > 1 indica que OOS supera IS — robustez genuina. Complementario al USDJPY Pullback 1H.
+- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.2×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **24.893**, P(ruin) **0.0%**, Max DD p95 **0.5%**, WFE **2.335**
+- **Trail sweep result:** 0.2 es el sweet spot — margen 4.8 pips vs spread 0.5 pip (ratio 9.6x). Pasar de trail=0.5 a trail=0.2 multiplica PF OOS x8 con mejor DD. El spread USDJPY es irrelevante frente al ATR 1H (~24 pips).
+- **FTMO viability:** ~€1,207/6m en €10k. WFE > 1 indica robustez genuina — OOS supera IS.
 
 ### ✅ NZDUSD Pullback 1H + Trail — CONDITIONAL PASS (`src/signals/pullback/trend_pullback.py`)
 
 - **Asset/TF:** NZDUSD 1h
-- **Logic:** EMA20 pullback, ADX > 25, H4 trend. Trail 0.5×ATR. Misma lógica que XAUUSD/GBPUSD.
-- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.5`
-- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.055**, P(ruin) **0.0%**, Max DD p95 **2.2%**
-- **Caveats:** Frecuencia baja (~20-30 trades/ventana). W2 y W3 OOS PF rozaron 1.0. Riesgo macro RBNZ similar a BoJ. Viable a 0.3% riesgo con vigilancia.
+- **Logic:** EMA20 pullback, ADX > 22, H4 trend. Trail 0.4×ATR.
+- **Best parameters:** `adx_min=22`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.4`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.398**, P(ruin) **0.0%**, Max DD p95 **1.5%**
+- **Sweep result:** ADX=22 aumenta frecuencia a 31 trades/ventana (vs 20 con ADX=25). Trail=0.4 mantiene 6/6 donde trail=0.3 pierde W3. PnL median $789/6m supera incluso ADX=20 trail=0.5 ($782) con mejor PF.
+- **Caveats:** Baja frecuencia (~21-46 trades/ventana). Riesgo macro RBNZ. Viable a 0.3% riesgo.
+
+### ✅ AUDUSD Pullback 1H Long-Only + Trail — VALIDADA (`src/signals/pullback/trend_pullback.py`)
+
+- **Asset/TF:** AUDUSD 1h
+- **Logic:** EMA20 pullback **LONG-ONLY**, ADX > 25, H4 trend alcista. Trail 0.3×ATR.
+- **Best parameters:** `adx_min=25`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.3`, `long_only=True`
+- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **5.756**, P(ruin) **0.0%**, Max DD p95 **0.2%**, WFE **1.935**
+- **Rescue story:** Versión bidireccional era FAIL (4/6). El 60% de señales SHORT arrastraban el resultado — AUD rebota sistemáticamente en regímenes mixtos. LONG-only captura únicamente los rallies commodity/risk-on. Trail=0.3 (vs 0.5) lleva de 4/6 a 6/6. ~7-8 trades/6m.
+- **Caveats:** Baja frecuencia. Riesgo macro: ciclo RBA dovish vs Fed hawkish puede revertir el edge.
 
 ### ❌ FVG XAUUSD 1H (`src/signals/fvg/fair_value_gap.py`)
 

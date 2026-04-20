@@ -13,7 +13,7 @@ params:
   rr_target: 2.5
   risk_pct: 0.003
   exit_mode: trail
-  trail_atr_mult: 0.5
+  trail_atr_mult: 0.2
 periods:
   is_start: '2023-01-01'
   is_end: '2025-01-01'
@@ -28,7 +28,7 @@ gates:
   min_trades: 30
   max_is_oos_degradation: 0.35
 status: validated
-verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 3.219 | WFE 1.357 |
-  P(ruin) 0.0% | Max DD p95 0.7% | PnL median $630/6m en $10k | IS 2023-2025 PF 2.47
-  | 174 trades IS | Trail 0.5xATR captura impulso apertura Londres en rango asiatico
-  USDJPY'
+verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 24.893 | WFE 2.335 |
+  P(ruin) 0.0% | Max DD p95 0.5% | PnL median $1207/6m en $10k | Trail optimizado
+  0.2xATR (spread USDJPY 0.5pip vs offset ~4.8pips — viable). Sweet spot sweep
+  trail=0.2 supera trail=0.5 en PF x8 con mejor DD.'

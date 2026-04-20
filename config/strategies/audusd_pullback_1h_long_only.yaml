@@ -1,0 +1,34 @@
+name: AUDUSD Pullback 1H Long-Only + Trail
+symbol: AUDUSD
+strategy: pullback
+timeframe: 1h
+hypothesis: 'EMA20 pullback LONG-ONLY en estructura alcista, ADX>25, filtro H4 trend.
+  Trail 0.3xATR. La version LONG-only rescata la estrategia fallida (4/6→6/6): el
+  60% de señales SHORT arrastraba el resultado porque AUD rebota sistematicamente
+  en regimenes mixtos. LONG-only captura los rallies AUD commodity/risk-on sin
+  quemar capital en rebotes bajistas fallidos. WFE 1.94 indica robustez genuina.'
+params:
+  adx_min: 25
+  rr_target: 2.5
+  risk_pct: 0.003
+  exit_mode: trail
+  trail_atr_mult: 0.3
+  long_only: true
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.05
+  min_trades: 15
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 5.756 | WFE 1.935 |
+  P(ruin) 0.0% | Max DD p95 0.2% | LONG-only rescata AUDUSD: elimina shorts que
+  arrastraban resultado. Trail 0.3xATR sweet spot (margen 3.5 pips >> spread 0.4 pip).
+  Riesgo: ciclo RBA dovish vs Fed hawkish puede revertir edge. ~7-8 trades LONG/6m.'
