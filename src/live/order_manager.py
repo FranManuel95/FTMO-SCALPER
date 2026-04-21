@@ -204,7 +204,14 @@ class OrderManager:
         return int(result.order)
 
     def _compute_volume(self, signal: Signal, balance: float, risk_pct: float) -> float:
-        return size_by_fixed_risk(balance, risk_pct, signal.entry_price, signal.stop_loss)
+        # size_by_fixed_risk returns units in price terms (balance*risk / stop_distance).
+        # MT5 expects lots. Divide by contract_size (100,000 for standard FX).
+        raw = size_by_fixed_risk(balance, risk_pct, signal.entry_price, signal.stop_loss)
+        if self.client.fake or self.dry_run:
+            return raw  # backtest mode: raw is self-consistent, no conversion needed
+        info = self.client.raw.symbol_info(signal.symbol)
+        contract_size = info.trade_contract_size if info is not None else 100_000
+        return raw / contract_size
 
     def _round_to_lot_step(self, symbol: str, volume: float) -> float:
         if self.client.fake or self.dry_run:
