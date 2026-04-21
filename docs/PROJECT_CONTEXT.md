@@ -203,3 +203,6 @@ XAUUSD ✅ · EURUSD ✅ · GBPUSD ✅ · USDJPY ✅ · EURJPY ✅ · GBPJPY ✅
 - Investigar estrategias en 4H para pares ya validados en 1H (pocas señales, probable FAIL)
 - Regenerar validation JSON de USDJPY Asian ORB a trail=0.5 explícito (JSON actual mezcla sweep runs)
 - Evaluar FVG XAUUSD 1H para live si se quiere aumentar frecuencia XAUUSD (PF 1.57, 6/6, pero 4ª estrategia en el par)
+
+**Mejoras de ejecución pendientes:**
+- **Spread check antes de abrir posiciones** — protege contra entrar durante ensanchamiento de spread en noticias (NFP, FOMC, CPI). Implementar en `portfolio_runner.py` antes de ejecutar una señal: si `current_spread > normal_spread × 3`, saltar la entrada. No requiere calendario externo. Los pares más expuestos son EURUSD (trail margin 3.5-4.5 pip vs spread noticias 3-8 pip) y USDCHF (3.2-4.8 pip vs 5-15 pip). Las posiciones ya abiertas no se filtran — el trailing stop gestiona la salida. El walk-forward ya incluyó todos los eventos de noticias 2022-2026 con 6/6 profitable, así que el riesgo es bajo incluso sin este filtro.
