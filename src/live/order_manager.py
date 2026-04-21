@@ -109,6 +109,29 @@ class OrderManager:
             return False
         p = pos[0]
 
+        # Validate minimum stop distance required by the broker.
+        # MT5 retcode 10016 (Invalid stops) fires when SL is within stops_level
+        # points of the current bid/ask. Skip the modify silently — the trail will
+        # retry on the next bar when price has moved further away.
+        info = mt5.symbol_info(p.symbol)
+        tick = mt5.symbol_info_tick(p.symbol)
+        if info is not None and tick is not None:
+            min_distance = info.trade_stops_level * info.point
+            if p.type == mt5.POSITION_TYPE_BUY:
+                if new_sl >= tick.bid - min_distance:
+                    logger.debug(
+                        f"MODIFY skip ticket={ticket}: SL {new_sl:.5f} too close to bid "
+                        f"{tick.bid:.5f} (min dist={min_distance:.5f})"
+                    )
+                    return False
+            else:
+                if new_sl <= tick.ask + min_distance:
+                    logger.debug(
+                        f"MODIFY skip ticket={ticket}: SL {new_sl:.5f} too close to ask "
+                        f"{tick.ask:.5f} (min dist={min_distance:.5f})"
+                    )
+                    return False
+
         request = {
             "action": mt5.TRADE_ACTION_SLTP,
             "symbol": p.symbol,
