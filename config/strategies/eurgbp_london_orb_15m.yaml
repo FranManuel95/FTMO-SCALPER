@@ -1,0 +1,41 @@
+name: EURGBP London Open ORB 15m
+symbol: EURGBP
+strategy: london_open
+timeframe: 15m
+hypothesis: 'EURGBP es el par mas liquido de la sesion London (07:00-12:00 UTC).
+  El rango de precio 07:00-08:00 UTC captura la consolidacion pre-apertura europea.
+  La ruptura a las 08:00 UTC captura flujos institucionales EUR y GBP simultaneos.
+  A diferencia del pullback (que requiere tendencia macro sostenida), el ORB solo
+  necesita un breakout de sesion — mecanica que no depende de la convergencia BoE/ECB.
+  La convergencia BoE/ECB que mata el pullback en W3 (H1 2024) en realidad crea
+  consolidacion limpia que mejora el ORB. Trail=0.4 sweet spot vs spread 1-2 pip.'
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.4
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 4.967 (trail=0.4) |
+  WFE 1.122 | P(ruin) 0.0% | Max DD p95 0.5% | PnL median ~$1,576/6m en $10k |
+  Trail sweep: 0.5→3.293 (PF OOS, WFE 1.111), 0.4→4.967 (sweet spot), 0.3→8.171
+  (margin 1.8-3 pips, demasiado ajustado en noticias). IS Gate 1: PF 3.289.
+  HALLAZGO CLAVE: W3 (H1 2024, convergencia BoE/ECB) OOS PF=4.651 — el mismo
+  regimen que mata el pullback EURGBP mejora el ORB (consolidacion limpia → breakout
+  limpio). Excluir el pullback era correcto; el ORB no tiene ese riesgo.
+  ~83-100 trades/6m OOS (~14-17/mes). Execution margin trail=0.4: ATR 6-10pip × 0.4
+  = 2.4-4 pip vs spread 1-2 pip (ratio 1.2-4x — aceptable).
+  EURGBP NY ORB 15M (PF 2.594) documentado pero excluido — dos ORBs mismo par.'

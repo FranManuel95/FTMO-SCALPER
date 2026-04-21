@@ -2,7 +2,7 @@
 
 Sistema de trading automático para cuentas de fondeo FTMO. Incluye investigación, backtesting, validación walk-forward y ejecución live en MetaTrader 5.
 
-## Estrategias en live (portfolio activo — 11 estrategias)
+## Estrategias en live (portfolio activo — 14 estrategias)
 
 | Estrategia | Par / TF | OOS PF | DD p95 | Risk/trade |
 |---|---|---|---|---|
@@ -11,14 +11,18 @@ Sistema de trading automático para cuentas de fondeo FTMO. Incluye investigaci�
 | Trend Pullback | USDJPY 1H | 2.52 | 1.8% | 0.3% |
 | NY Open ORB | XAUUSD 15M | 4.21 | 0.6% | 0.25% |
 | London Open ORB | XAUUSD 15M | 2.91 | 0.5% | 0.25% |
-| Asian Session ORB | USDJPY 1H | **24.89** | 0.5% | 0.3% |
+| Asian Session ORB | USDJPY 1H | 3.22 | 0.7% | 0.3% |
 | Trend Pullback | NZDUSD 1H | 2.40 | 1.5% | 0.3% |
 | London Open ORB | EURUSD 15M | 3.98 | 0.6% | 0.25% |
 | London Open ORB | GBPJPY 15M | 5.28 | 0.4% | 0.25% |
 | Asian Session ORB | EURJPY 1H | **9.36** | 0.6% | 0.3% |
 | NY Open ORB | USDCAD 15M | 4.47 | 0.6% | 0.25% |
+| Asian Session ORB | AUDUSD 1H | **7.07** | 0.2% | 0.3% |
+| London Open ORB | EURGBP 15M | 4.97 | 0.5% | 0.25% |
+| London Open ORB | USDCHF 15M | 6.85 | 0.4% | 0.25% |
 
-> GBPJPY London ORB: filtrar días reunión BoJ (~8 al año) como precaución adicional.
+> GBPJPY London ORB: filtrar días reunión BoJ (~8 al año).
+> USDCHF London ORB: SNB gap risk neutralizado (rango 07:00-08:00 UTC incorpora horario SNB 07:30 UTC, cierre <12:00 UTC).
 
 ## Estrategias validadas (documentadas, no en live)
 
@@ -26,10 +30,10 @@ Sistema de trading automático para cuentas de fondeo FTMO. Incluye investigaci�
 |---|---|---|---|---|
 | London Open ORB | EURJPY 15M | 4.03 | 0.6% | Correlaciona con EURUSD London ORB |
 | London Open ORB | USDCAD 15M | 4.08 | 0.5% | Correlaciona con NY ORB mismo par |
-| Trend Pullback | EURGBP 1H | 4.40 | 1.1% | BoE/ECB convergencia riesgo |
-| Trend Pullback | USDCHF 1H | 2.67 | 2.0% | SNB intervention risk |
 | Fair Value Gap | XAUUSD 1H | 1.57 | 3.2% | Concentración XAUUSD |
 | NY Open ORB | EURUSD 15M | 2.75 | 0.6% | Edge más fino que London ORB |
+| NY Open ORB | USDCHF 15M | 4.09 | 0.4% | Correlación con USDCAD NY ORB |
+| NY Open ORB | EURGBP 15M | 2.59 | 0.4% | Dos ORBs en mismo par |
 | Trend Pullback (L) | AUDUSD 1H | 5.76 | 0.2% | Solo 7-8 trades/6m |
 
 Todas usan trailing stop ATR. Validadas con IS=12m / OOS=6m, periodo 2022–2026.

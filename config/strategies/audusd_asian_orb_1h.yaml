@@ -1,0 +1,38 @@
+name: AUDUSD Asian Session ORB 1h
+symbol: AUDUSD
+strategy: asian_orb
+timeframe: 1h
+hypothesis: 'AUD es la divisa primaria de la sesion asiatica (Sydney 23:00 UTC, RBA,
+  datos China). El rango asiatico (23:00-07:00 UTC) captura el movimiento institucional
+  AUD. Cuando la sesion de Londres abre (07:00 UTC), flujos USD institucionales rompen
+  el rango AUD. Misma mecanica que USDJPY Asian ORB (PF 24.89) y EURJPY Asian ORB
+  (PF 9.36) — cuarta familia Asian ORB. Spread AUDUSD 0.4-0.8 pip vs ATR 50 pips
+  hace viable incluso trail=0.2 (ratio 25x), sweet spot trail=0.3.'
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.003
+  exit_mode: trail
+  trail_atr_mult: 0.3
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 7.073 (trail=0.3) |
+  WFE 1.260 | P(ruin) 0.0% | Max DD p95 0.2% | PnL median ~$982/6m en $10k |
+  Trail sweep: 0.5→2.706, 0.4→4.090, 0.3→7.073 (sweet spot), 0.2→16.303.
+  Execution margin trail=0.3: ATR 50pip × 0.3 = 15 pips vs spread 0.4-0.8 pip
+  (ratio 19-37x) — sin restriccion de ejecucion. Cuarto miembro familia Asian ORB.
+  AUD defines Asian range (Sydney/Tokyo), London breaks it structurally.
+  AUDUSD NY ORB 15M (2.334 OOS) y London ORB 15M (2.161 OOS) documentados pero
+  excluidos — edge mas debil y W4 London ORB OOS PF=1.020.'

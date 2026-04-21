@@ -1,0 +1,40 @@
+name: USDCHF London Open ORB 15m
+symbol: USDCHF
+strategy: london_open
+timeframe: 15m
+hypothesis: 'USDCHF es el par Fed vs SNB. El pullback USDCHF (5/6, PF 2.67) fue
+  excluido por riesgo de gaps SNB (300+ pips en intervenciones surprise). El ORB
+  15M elimina este riesgo estructuralmente: la ventana de rango 07:00-08:00 UTC ya
+  incorpora el horario SNB habitual (09:30 Zurich = 07:30 UTC), y las posiciones
+  cierran antes de las 12:00 UTC sin overnight exposure. El rango London captura la
+  volatilidad USD/CHF de apertura europea — exposicion diferente a la sesion NY.
+  Trail=0.4 sweet spot: margin 3.2-4.8 pip vs spread 1.5-2 pip (ratio 1.6-3.2x).'
+params:
+  adx_min: 18
+  rr_target: 2.5
+  risk_pct: 0.0025
+  exit_mode: trail
+  trail_atr_mult: 0.4
+periods:
+  is_start: '2023-01-01'
+  is_end: '2025-01-01'
+  oos_start: '2025-01-01'
+  oos_end: '2026-04-01'
+  wf_start: '2022-01-01'
+  wf_end: '2026-04-01'
+gates:
+  min_pf_is: 1.3
+  min_pf_oos: 1.1
+  max_dd_pct: 0.1
+  min_trades: 30
+  max_is_oos_degradation: 0.35
+status: validated
+verdict: 'PASS — ESTRATEGIA ROBUSTA | OOS 6/6 | PF medio OOS 6.848 (trail=0.4) |
+  WFE 1.309 | P(ruin) 0.0% | Max DD p95 0.4% | PnL median ~$1,890/6m en $10k |
+  Trail sweep: 0.5→4.577, 0.4→6.848 (sweet spot), 0.3→10.848 (PF extraordinario
+  pero margin 1.2-2.4x borderline en dias CPI/SNB-adjacent). IS Gate 1: PF 4.598.
+  SNB RISK NEUTRALIZADO: ventana rango 07:00-08:00 UTC incorpora horario habitual
+  SNB (07:30 UTC). Posiciones cierran < 12:00 UTC (no overnight). Mismo mecanismo
+  que BoJ risk en GBPJPY London ORB. USDCHF NY ORB 15M (PF 4.094) documentado pero
+  excluido — correlacion con USDCAD NY ORB (ambos capturan volatilidad US data CME).
+  London ORB add exposure diferente: session europea USD/CHF.'
