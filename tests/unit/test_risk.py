@@ -51,7 +51,8 @@ class TestPositionSizing:
             entry_price=1.1000,
             stop_loss_price=1.0990,
         )
-        assert size == pytest.approx(10000.0)
+        # risk_amount=100, stop_distance=0.001 → 100/0.001 = 100,000 price units
+        assert size == pytest.approx(100_000.0)
 
     def test_zero_stop_distance(self):
         size = size_by_fixed_risk(10000, 0.01, 1.1000, 1.1000)
