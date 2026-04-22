@@ -227,14 +227,27 @@ class OrderManager:
         return int(result.order)
 
     def _compute_volume(self, signal: Signal, balance: float, risk_pct: float) -> float:
-        # size_by_fixed_risk returns units in price terms (balance*risk / stop_distance).
-        # MT5 expects lots. Divide by contract_size (100,000 for standard FX).
-        raw = size_by_fixed_risk(balance, risk_pct, signal.entry_price, signal.stop_loss)
-        if self.client.fake or self.dry_run:
-            return raw  # backtest mode: raw is self-consistent, no conversion needed
+        if self.client.fake:
+            # Backtest/test mode: raw units are self-consistent, no currency conversion needed.
+            return size_by_fixed_risk(balance, risk_pct, signal.entry_price, signal.stop_loss)
+
+        # Real MT5 connection (live or dry-run with real data).
+        # Use trade_tick_value which MT5 expresses in account currency (EUR) and already
+        # incorporates the quote-to-account conversion. Without this, JPY pairs (GBPJPY,
+        # USDJPY) produce lot sizes ~160× too small and get capped at the lot minimum.
+        self.client.ensure_connected()
         info = self.client.raw.symbol_info(signal.symbol)
-        contract_size = info.trade_contract_size if info is not None else 100_000
-        return raw / contract_size
+        risk_amount = balance * risk_pct
+        stop_distance = abs(signal.entry_price - signal.stop_loss)
+        if stop_distance == 0 or info is None:
+            return 0.0
+        tick_size = info.trade_tick_size
+        tick_value = info.trade_tick_value  # account-currency per tick per 1 lot
+        if tick_size > 0 and tick_value > 0:
+            return risk_amount / ((stop_distance / tick_size) * tick_value)
+        # Fallback for symbols without tick data (old formula).
+        contract_size = info.trade_contract_size or 100_000
+        return size_by_fixed_risk(balance, risk_pct, signal.entry_price, signal.stop_loss) / contract_size
 
     def _round_to_lot_step(self, symbol: str, volume: float) -> float:
         if self.client.fake or self.dry_run:

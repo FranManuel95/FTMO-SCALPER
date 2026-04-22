@@ -122,6 +122,86 @@ def test_trail_manager_never_relaxes_sl():
     assert n == 1
 
 
+def _make_signal(symbol, entry, sl):
+    from datetime import datetime, timezone
+    return Signal(
+        symbol=symbol, side=Side.LONG, signal_type=SignalType.PULLBACK,
+        timestamp=datetime(2026, 4, 22, tzinfo=timezone.utc),
+        entry_price=entry, stop_loss=sl, take_profit=entry + (entry - sl) * 2.5,
+    )
+
+
+def _make_real_client_with_mock_mt5(mock_info):
+    """Construye un MT5Client con fake=False y parchea su propiedad raw con mock_info."""
+    import types
+    from unittest.mock import patch, PropertyMock
+
+    mock_mt5 = types.SimpleNamespace(symbol_info=lambda s: mock_info)
+    client = MT5Client(fake=False)
+    # En Linux sin MT5 instalado el constructor fuerza fake=True — lo sobrescribimos
+    # para ejercer la rama de conversión de moneda en _compute_volume.
+    client.fake = False
+    client._connected = True
+    client.ensure_connected = lambda max_retries=3: True
+    return client, mock_mt5, patch.object(type(client), "raw", new_callable=PropertyMock, return_value=mock_mt5)
+
+
+def test_compute_volume_gbpjpy_tick_value():
+    """GBPJPY lot sizing usa trade_tick_value — sin el fix da 0.01 (mínimo)."""
+    import types
+    from src.live.order_manager import OrderManager
+
+    # EUR/JPY ≈ 162: tick_value (0.001 JPY per tick, per lot) = 100_000 * 0.001 / 162 ≈ 0.617 EUR
+    mock_info = types.SimpleNamespace(
+        trade_tick_size=0.001,
+        trade_tick_value=0.617,
+        trade_contract_size=100_000,
+    )
+    client, _, raw_patch = _make_real_client_with_mock_mt5(mock_info)
+    with raw_patch:
+        om = OrderManager(client, dry_run=False)
+        sig = _make_signal("GBPJPY", entry=215.585, sl=215.062)
+        # stop = 0.523 JPY, risk = 160_000 * 0.0025 = 400 EUR
+        # risk_per_lot = (0.523 / 0.001) * 0.617 = 523 * 0.617 ≈ 322.7 EUR/lot
+        # lots = 400 / 322.7 ≈ 1.24
+        vol = om._compute_volume(sig, balance=160_000, risk_pct=0.0025)
+    assert vol == pytest.approx(1.24, rel=0.05), f"Expected ~1.24 lots, got {vol:.4f}"
+
+
+def test_compute_volume_eurusd_tick_value():
+    """EURUSD lot sizing con tick_value: verifica que la ruta real funciona."""
+    import types
+    from src.live.order_manager import OrderManager
+
+    # EURUSD: tick_value = 100_000 * 0.00001 / 1.175 ≈ 0.851 EUR/tick/lot
+    mock_info = types.SimpleNamespace(
+        trade_tick_size=0.00001,
+        trade_tick_value=0.851,
+        trade_contract_size=100_000,
+    )
+    client, _, raw_patch = _make_real_client_with_mock_mt5(mock_info)
+    with raw_patch:
+        om = OrderManager(client, dry_run=False)
+        sig = _make_signal("EURUSD", entry=1.17562, sl=1.17430)
+        # stop = 0.00132, risk = 400 EUR
+        # risk_per_lot = (0.00132 / 0.00001) * 0.851 = 132 * 0.851 ≈ 112.3 EUR/lot
+        # lots = 400 / 112.3 ≈ 3.56
+        vol = om._compute_volume(sig, balance=160_000, risk_pct=0.0025)
+    assert vol == pytest.approx(3.56, rel=0.05), f"Expected ~3.56 lots, got {vol:.4f}"
+
+
+def test_compute_volume_fake_client_unchanged():
+    """El cliente fake sigue usando raw (compatibilidad backtest)."""
+    from src.live.order_manager import OrderManager
+
+    client = MT5Client(fake=True)
+    om = OrderManager(client, dry_run=True)
+    sig = _make_signal("GBPJPY", entry=215.585, sl=215.062)
+    vol = om._compute_volume(sig, balance=160_000, risk_pct=0.0025)
+    # raw = 160_000 * 0.0025 / 0.523 ≈ 764.8 (self-consistent backtest units)
+    assert vol == pytest.approx(764.8, rel=0.01)
+
+
 class _CapturingNotifier(Notifier):
     def __init__(self):
         self.events: list[tuple[str, tuple]] = []
