@@ -223,7 +223,7 @@ def build_default_portfolio() -> list[StrategyConfig]:
         StrategyConfig(
             strategy_id="usdjpy_asian_orb_1h",
             symbol="USDJPY", timeframe="1h",
-            risk_pct=0.003, trail_atr_mult=0.5,      # trail=0.5 validado 6/6, PF 3.22
+            risk_pct=0.003, trail_atr_mult=0.2,      # sweet spot: PF 24.893 OOS vs 3.22 con trail=0.5; margen 4.8pip vs spread 0.5pip
             generator=build_usdjpy_asian_orb_1h(),
         ),
         StrategyConfig(
