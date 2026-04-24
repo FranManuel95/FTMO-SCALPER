@@ -211,7 +211,7 @@ class OrderManager:
             "tp": signal.take_profit,
             "deviation": self.deviation_points,
             "magic": self.magic,
-            "comment": f"strat:{strategy_id[:20]}",
+            "comment": f"strat:{strategy_id[:32]}",
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
         result = mt5.order_send(request)

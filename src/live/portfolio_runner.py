@@ -87,6 +87,7 @@ class PortfolioRunner:
             f"strategies={[s.strategy_id for s in self.strategies]} | dry_run={self.dry_run}"
         )
         self.notifier.on_startup(initial_balance, [s.strategy_id for s in self.strategies])
+        self._recover_open_positions()
 
     # ── Loop principal ────────────────────────────────────────────────────────
 
@@ -250,6 +251,86 @@ class PortfolioRunner:
             self._daily_guard.record_pnl(pnl, close_time)
             self._max_guard.update(pnl)
             self.notifier.on_position_closed(pos, pnl)
+
+    # ── Recuperación de estado ────────────────────────────────────────────────
+
+    def _recover_open_positions(self) -> None:
+        """Al arrancar recupera posiciones abiertas de instancias previas y retoma el trailing."""
+        if self.dry_run or self.client.fake:
+            return
+
+        open_mt5 = self._order_manager.open_positions()
+        if not open_mt5:
+            return
+
+        strategy_map = {s.strategy_id: s for s in self.strategies}
+        mt5 = self.client.raw
+        recovered = 0
+
+        for mt5_pos in open_mt5:
+            ticket = mt5_pos.ticket
+            if ticket in self._positions:
+                continue
+
+            comment = mt5_pos.comment or ""
+            strategy_id = comment.removeprefix("strat:").strip()
+
+            cfg = strategy_map.get(strategy_id)
+            if cfg is None:
+                # El comment puede estar truncado a 20 chars — buscar por prefijo
+                matches = [s for s in self.strategies if s.strategy_id.startswith(strategy_id)]
+                cfg = matches[0] if len(matches) == 1 else None
+            if cfg is None:
+                logger.warning(
+                    f"RECOVER skip ticket={ticket} comment={comment!r} "
+                    f"— no coincide con ninguna estrategia"
+                )
+                continue
+
+            df = None
+            atr = 0.0
+            try:
+                df = self._data_loader.get_closed_bars(cfg.symbol, cfg.timeframe, cfg.bars_to_fetch)
+                atr = self._extract_atr(df, cfg.atr_column)
+            except Exception as e:
+                logger.warning(f"RECOVER ticket={ticket}: no se pudo obtener ATR — {e}")
+
+            side = Side.LONG if mt5_pos.type == mt5.POSITION_TYPE_BUY else Side.SHORT
+            entry_time = datetime.fromtimestamp(mt5_pos.time, tz=timezone.utc)
+
+            highest = mt5_pos.price_open
+            lowest = mt5_pos.price_open
+            if df is not None and not df.empty:
+                bars_since = df[df.index >= pd.Timestamp(entry_time)]
+                if not bars_since.empty:
+                    highest = max(mt5_pos.price_open, float(bars_since["high"].max()))
+                    lowest = min(mt5_pos.price_open, float(bars_since["low"].min()))
+
+            pos = LivePosition(
+                ticket=ticket,
+                symbol=mt5_pos.symbol,
+                side=side,
+                entry_price=mt5_pos.price_open,
+                stop_loss=mt5_pos.sl,
+                take_profit=mt5_pos.tp,
+                volume=mt5_pos.volume,
+                strategy_id=cfg.strategy_id,
+                atr_at_signal=atr,
+                entry_time=entry_time,
+            )
+            pos.highest_since_entry = highest
+            pos.lowest_since_entry = lowest
+
+            self._positions[ticket] = pos
+            recovered += 1
+            logger.info(
+                f"RECOVER ticket={ticket} {side.value} {mt5_pos.symbol} "
+                f"entry={mt5_pos.price_open} sl={mt5_pos.sl} tp={mt5_pos.tp} "
+                f"atr={atr:.5f} highest_since={highest:.5f}"
+            )
+
+        if recovered:
+            logger.info(f"RECOVER: {recovered} posición(es) recuperada(s) para trailing")
 
     # ── Utilidades ────────────────────────────────────────────────────────────
 
