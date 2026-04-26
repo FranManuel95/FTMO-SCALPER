@@ -19,9 +19,10 @@ pasándoles un DataFrame descargado live. Esto garantiza paridad 1:1 con backtes
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Callable
 
 import pandas as pd
@@ -73,6 +74,10 @@ class PortfolioRunner:
     _daily_guard: DailyLossGuard = field(init=False)
     _max_guard: MaxLossGuard = field(init=False)
     _last_snapshot_unix: float = 0.0
+    _stop_event: threading.Event = field(init=False, repr=False)
+    _last_anomaly_check_unix: float = field(init=False, repr=False)
+    _last_weekly_report_date: "date | None" = field(init=False, repr=False)
+    _alerted_anomaly_keys: "set[str]" = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._data_loader = LiveDataLoader(self.client)
@@ -100,19 +105,35 @@ class PortfolioRunner:
             strategies=[s.strategy_id for s in self.strategies],
             dry_run=self.dry_run,
         )
+        self._stop_event = threading.Event()
+        self._last_anomaly_check_unix = 0.0
+        self._last_weekly_report_date = None
+        self._alerted_anomaly_keys: set[str] = set()
         self._recover_open_positions()
+
+        from .notifier import TelegramNotifier
+        if isinstance(self.notifier, TelegramNotifier):
+            t = threading.Thread(
+                target=self._listen_telegram_commands,
+                daemon=True,
+                name="tg-cmd-listener",
+            )
+            t.start()
+            logger.info("Telegram command listener iniciado (/stop, /status)")
 
     # ── Loop principal ────────────────────────────────────────────────────────
 
     def run_forever(self) -> None:
-        logger.info("Entrando en run_forever — Ctrl+C para parar")
+        logger.info("Entrando en run_forever — Ctrl+C o /stop (Telegram) para parar")
         try:
-            while True:
+            while not self._stop_event.is_set():
                 self.tick()
-                time.sleep(self.tick_interval_seconds)
+                self._stop_event.wait(timeout=self.tick_interval_seconds)
         except KeyboardInterrupt:
             logger.info("Interrupción manual — cerrando runner")
         finally:
+            self._stop_event.set()
+            self.event_logger.system_event("bot_stop")
             self.client.disconnect()
 
     def tick(self) -> None:
@@ -126,6 +147,8 @@ class PortfolioRunner:
         self._state.prune(now)
         self._sync_positions()
         self._maybe_emit_market_snapshot(now)
+        self._maybe_check_anomalies(now)
+        self._maybe_send_weekly_report(now)
 
         latest_bars_by_symbol: dict[str, pd.DataFrame] = {}
 
@@ -511,3 +534,151 @@ class PortfolioRunner:
         else:
             series = df[col].dropna()
         return float(series.iloc[-1]) if len(series) else 0.0
+
+    # ── Comandos Telegram ─────────────────────────────────────────────────────
+
+    def _listen_telegram_commands(self) -> None:
+        """Background thread: sondea Telegram cada 5s en busca de /stop o /status."""
+        while not self._stop_event.is_set():
+            try:
+                for cmd in self.notifier.get_commands():
+                    if cmd == "/stop":
+                        logger.info("Stop remoto solicitado via Telegram")
+                        self.notifier.on_bot_stop_requested()
+                        self._stop_event.set()
+                    elif cmd == "/status":
+                        n = len(self._positions)
+                        try:
+                            bal = f"{self.client.account_balance():.2f}"
+                        except Exception:
+                            bal = "—"
+                        self.notifier._send(
+                            f"✅ <b>Bot activo</b>\n"
+                            f"Posiciones abiertas: {n}\n"
+                            f"Balance: {bal}\n"
+                            f"{datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}"
+                        )
+            except Exception as e:
+                logger.debug(f"Telegram command poll error: {e}")
+            self._stop_event.wait(timeout=5.0)
+
+    # ── Detección de anomalías ────────────────────────────────────────────────
+
+    _ANOMALY_INTERVAL_S: int = 1800  # cada 30 minutos
+
+    def _maybe_check_anomalies(self, now: datetime) -> None:
+        ts = now.timestamp()
+        if ts - self._last_anomaly_check_unix < self._ANOMALY_INTERVAL_S:
+            return
+        self._last_anomaly_check_unix = ts
+        try:
+            self._check_and_alert_anomalies(now)
+        except Exception as e:
+            logger.debug(f"anomaly check error: {e}")
+
+    def _check_and_alert_anomalies(self, now: datetime) -> None:
+        try:
+            from dashboard.lib.metrics import detect_anomalies
+        except ImportError:
+            return
+
+        since_unix = now.timestamp() - 30 * 24 * 3600
+        close_rows = self.event_logger.query(event_type="position_close", since_unix=since_unix)
+        if not close_rows:
+            return
+
+        closes = pd.DataFrame([
+            {
+                "ticket": r["ticket"],
+                "strategy_id": r["strategy_id"] or r["payload"].get("strategy_id"),
+                "symbol": r["symbol"] or r["payload"].get("symbol"),
+                "duration_seconds": r["payload"].get("duration_seconds", 0),
+                "net": r["payload"].get("net", 0.0),
+                "pnl": r["payload"].get("pnl", 0.0),
+                "close_time": pd.to_datetime(r["payload"].get("close_time"), utc=True),
+            }
+            for r in close_rows
+        ])
+        order_rows = self.event_logger.query(event_type="order", since_unix=since_unix)
+        orders = pd.DataFrame([
+            {
+                "symbol": r["symbol"],
+                "slippage_pips": r["payload"].get("slippage_pips", 0.0),
+                "volume": r["payload"].get("volume", 0.0),
+            }
+            for r in order_rows
+        ]) if order_rows else pd.DataFrame()
+
+        for a in detect_anomalies(closes, orders):
+            if a["severity"] not in ("high", "medium"):
+                continue
+            key = f"{a['category']}:{a.get('title', '')}"
+            if key in self._alerted_anomaly_keys:
+                continue
+            self._alerted_anomaly_keys.add(key)
+            self.notifier.on_anomaly_alert(a["title"], a["detail"], a["severity"])
+            logger.warning(f"ANOMALÍA {a['severity'].upper()}: {a['title']}")
+
+    # ── Resumen semanal ───────────────────────────────────────────────────────
+
+    def _maybe_send_weekly_report(self, now: datetime) -> None:
+        if now.weekday() != 6 or now.hour < 8:  # domingos a partir de 08:00 UTC
+            return
+        today = now.date()
+        if self._last_weekly_report_date == today:
+            return
+        self._last_weekly_report_date = today
+        try:
+            self._send_weekly_report(now)
+        except Exception as e:
+            logger.warning(f"weekly report error: {e}")
+
+    def _send_weekly_report(self, now: datetime) -> None:
+        since_unix = now.timestamp() - 7 * 24 * 3600
+        rows = self.event_logger.query(event_type="position_close", since_unix=since_unix, limit=500)
+
+        if not rows:
+            self.notifier.on_weekly_report("📊 <b>Resumen semanal</b>\nSin trades esta semana.")
+            return
+
+        closes = pd.DataFrame([
+            {
+                "strategy_id": r["strategy_id"] or r["payload"].get("strategy_id", "—"),
+                "net": r["payload"].get("net", 0.0),
+            }
+            for r in rows
+        ])
+
+        total = len(closes)
+        wins = int((closes["net"] > 0).sum())
+        losses = total - wins
+        wr = wins / total * 100 if total else 0.0
+        net_total = float(closes["net"].sum())
+        gross_profit = float(closes[closes["net"] > 0]["net"].sum())
+        gross_loss = float(-closes[closes["net"] < 0]["net"].sum())
+        pf = gross_profit / gross_loss if gross_loss > 0 else 0.0
+
+        by_strat = (
+            closes.groupby("strategy_id")
+            .apply(lambda g: pd.Series({"n": len(g), "wins": int((g["net"] > 0).sum()), "net": g["net"].sum()}))
+        )
+
+        lines = [
+            f"📊 <b>Resumen semanal</b> — {now:%d/%m/%Y}",
+            "━━━━━━━━━━━━━━━━",
+            f"Trades: {total} | ✅ {wins} ({wr:.0f}%) | ❌ {losses}",
+            f"P&amp;L neto: <b>{net_total:+.2f}</b> | PF: {pf:.2f}",
+            "",
+            "<b>Por estrategia:</b>",
+        ]
+        for strat, row in by_strat.iterrows():
+            strat_wr = row["wins"] / row["n"] * 100 if row["n"] > 0 else 0.0
+            lines.append(f"• {strat}: {int(row['n'])}T | {strat_wr:.0f}% WR | {row['net']:+.2f}")
+
+        snap = self.event_logger.query(event_type="market_snapshot", limit=1)
+        if snap:
+            balance = snap[0]["payload"].get("balance", 0.0)
+            lines += ["", f"💰 Balance actual: {balance:.2f}"]
+
+        self.notifier.on_weekly_report("\n".join(lines))
+        self.event_logger.system_event("weekly_report_sent", week_of=now.strftime("%Y-W%V"))

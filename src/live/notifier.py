@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 import requests
@@ -34,6 +34,10 @@ class Notifier:
     def on_guard_triggered(self, guard: str, reason: str) -> None: ...
     def on_error(self, context: str, err: str) -> None: ...
     def on_heartbeat(self, msg: str) -> None: ...
+    def on_anomaly_alert(self, title: str, detail: str, severity: str) -> None: ...
+    def on_weekly_report(self, report: str) -> None: ...
+    def on_bot_stop_requested(self) -> None: ...
+    def get_commands(self) -> list[str]: return []
 
 
 class NullNotifier(Notifier):
@@ -46,6 +50,7 @@ class TelegramNotifier(Notifier):
     chat_id: str
     timeout_s: float = 10.0
     prefix: str = "FTMO"
+    _last_update_id: int = field(default=0, init=False, repr=False)
 
     @classmethod
     def from_env(cls) -> "TelegramNotifier | None":
@@ -117,3 +122,39 @@ class TelegramNotifier(Notifier):
 
     def on_heartbeat(self, msg: str) -> None:
         self._send(f"💓 {msg}")
+
+    def on_anomaly_alert(self, title: str, detail: str, severity: str) -> None:
+        emoji = {"high": "🔴", "medium": "🟡", "low": "🔵"}.get(severity, "⚠️")
+        self._send(
+            f"{emoji} <b>ANOMALÍA {severity.upper()}</b>\n"
+            f"<b>{title}</b>\n{detail}"
+        )
+
+    def on_weekly_report(self, report: str) -> None:
+        self._send(report)
+
+    def on_bot_stop_requested(self) -> None:
+        self._send("🛑 <b>Stop solicitado via Telegram — cerrando bot...</b>")
+
+    # ── Recepción de comandos ───────────────────────────────────────────────────
+
+    def get_commands(self) -> list[str]:
+        """Sondea getUpdates y devuelve los /comandos recibidos desde la última consulta."""
+        url = f"https://api.telegram.org/bot{self.bot_token}/getUpdates"
+        try:
+            r = requests.get(
+                url,
+                params={"offset": self._last_update_id + 1, "timeout": 1},
+                timeout=5,
+            )
+            if not r.ok:
+                return []
+            commands = []
+            for update in r.json().get("result", []):
+                self._last_update_id = update["update_id"]
+                text = update.get("message", {}).get("text", "").strip()
+                if text.startswith("/"):
+                    commands.append(text.lower().split()[0])  # solo el comando, sin args
+            return commands
+        except Exception:
+            return []
