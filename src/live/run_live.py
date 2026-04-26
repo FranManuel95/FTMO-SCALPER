@@ -25,6 +25,7 @@ from src.core.logging import setup_logging
 from src.features.technical.indicators import add_adx, add_atr
 from src.features.trend.htf_filter import add_htf_trend
 
+from .event_logger import EventLogger, NullEventLogger
 from .mt5_client import MT5Client, MT5Credentials
 from .notifier import NullNotifier, TelegramNotifier
 from .portfolio_runner import PortfolioRunner, StrategyConfig
@@ -339,6 +340,12 @@ def main() -> int:
                         help="Diagnóstico completo: conexión, datos, generators — sin operar")
     parser.add_argument("--no-telegram", action="store_true",
                         help="Desactiva notificaciones Telegram aunque haya env vars")
+    parser.add_argument("--no-events", action="store_true",
+                        help="Desactiva el EventLogger (útil para depurar sin generar data/)")
+    parser.add_argument("--events-db", default="data/events.db",
+                        help="Ruta del SQLite de eventos (default data/events.db)")
+    parser.add_argument("--events-jsonl", default="data/events.jsonl",
+                        help="Ruta del JSONL append-only (default data/events.jsonl)")
     args = parser.parse_args()
 
     setup_logging()
@@ -362,12 +369,19 @@ def main() -> int:
 
     notifier = NullNotifier() if args.no_telegram else (TelegramNotifier.from_env() or NullNotifier())
 
+    if args.no_events:
+        event_logger: EventLogger | NullEventLogger = NullEventLogger()
+    else:
+        event_logger = EventLogger(args.events_db, args.events_jsonl)
+        logger.info(f"EventLogger activo | sqlite={args.events_db} | jsonl={args.events_jsonl}")
+
     runner = PortfolioRunner(
         client=client,
         strategies=build_default_portfolio(),
         dry_run=dry_run,
         tick_interval_seconds=args.tick_seconds,
         notifier=notifier,
+        event_logger=event_logger,
     )
 
     if args.check:

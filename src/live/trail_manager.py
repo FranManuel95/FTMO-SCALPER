@@ -19,15 +19,22 @@ import pandas as pd
 
 from src.core.types import Side
 
+from .event_logger import EventLogger, NullEventLogger
 from .order_manager import LivePosition, OrderManager
 
 logger = logging.getLogger(__name__)
 
 
 class TrailManager:
-    def __init__(self, order_manager: OrderManager, trail_atr_mult: float = 0.5):
+    def __init__(
+        self,
+        order_manager: OrderManager,
+        trail_atr_mult: float = 0.5,
+        event_logger: EventLogger | NullEventLogger | None = None,
+    ):
         self.order_manager = order_manager
         self.trail_atr_mult = trail_atr_mult
+        self.event_logger = event_logger or NullEventLogger()
 
     def update_all(
         self,
@@ -44,6 +51,8 @@ class TrailManager:
         for pos in positions:
             df = latest_bars.get(pos.symbol)
             if df is None or df.empty:
+                self._emit_trail_event(pos, computed_sl=None, applied=False,
+                                       skip_reason="no_bars")
                 continue
 
             # Only use bars that closed AFTER the position was opened.
@@ -51,6 +60,8 @@ class TrailManager:
             # centimes of the entry price before the position has a chance to develop.
             bars_after = df[df.index > pd.Timestamp(pos.entry_time)]
             if bars_after.empty:
+                self._emit_trail_event(pos, computed_sl=None, applied=False,
+                                       skip_reason="no_bars_since_entry")
                 continue
 
             pos.highest_since_entry = max(pos.highest_since_entry, float(bars_after["high"].max()))
@@ -58,18 +69,51 @@ class TrailManager:
 
             new_sl = self._compute_trail_sl(pos)
             if new_sl is None:
+                self._emit_trail_event(pos, computed_sl=None, applied=False,
+                                       skip_reason="invalid_atr")
                 continue
 
-            if self._is_improvement(pos, new_sl):
-                if self.order_manager.modify_stop_loss(pos.ticket, new_sl):
-                    logger.info(
-                        f"TRAIL {pos.symbol} ticket={pos.ticket} "
-                        f"{pos.stop_loss:.5f} → {new_sl:.5f} "
-                        f"(high_since_entry={pos.highest_since_entry:.5f})"
-                    )
-                    pos.stop_loss = new_sl
-                    n_updates += 1
+            if not self._is_improvement(pos, new_sl):
+                self._emit_trail_event(pos, computed_sl=new_sl, applied=False,
+                                       skip_reason="not_improvement")
+                continue
+
+            if self.order_manager.modify_stop_loss(pos.ticket, new_sl):
+                logger.info(
+                    f"TRAIL {pos.symbol} ticket={pos.ticket} "
+                    f"{pos.stop_loss:.5f} → {new_sl:.5f} "
+                    f"(high_since_entry={pos.highest_since_entry:.5f})"
+                )
+                self._emit_trail_event(pos, computed_sl=new_sl, applied=True,
+                                       skip_reason=None)
+                pos.stop_loss = new_sl
+                n_updates += 1
+            else:
+                self._emit_trail_event(pos, computed_sl=new_sl, applied=False,
+                                       skip_reason="modify_rejected")
         return n_updates
+
+    def _emit_trail_event(
+        self,
+        pos: LivePosition,
+        computed_sl: float | None,
+        applied: bool,
+        skip_reason: str | None,
+    ) -> None:
+        self.event_logger.trail_update(
+            strategy_id=pos.strategy_id,
+            symbol=pos.symbol,
+            ticket=pos.ticket,
+            side=pos.side.value,
+            current_sl=pos.stop_loss,
+            computed_sl=computed_sl,
+            applied=applied,
+            skip_reason=skip_reason,
+            highest_since_entry=pos.highest_since_entry,
+            lowest_since_entry=pos.lowest_since_entry,
+            atr_at_signal=pos.atr_at_signal,
+            trail_mult=self.trail_atr_mult,
+        )
 
     def _compute_trail_sl(self, pos: LivePosition) -> float | None:
         if pos.atr_at_signal <= 0:

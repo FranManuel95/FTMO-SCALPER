@@ -18,6 +18,14 @@ data/external/
 !data/processed/.gitkeep
 !data/external/.gitkeep
 
+# Eventos del bot live (generados, locales, sensibles)
+data/events.db
+data/events.db-journal
+data/events.db-wal
+data/events.db-shm
+data/events.jsonl
+data/events.jsonl.*
+
 # Logs
 logs/
 *.log

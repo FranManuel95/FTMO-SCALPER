@@ -18,6 +18,7 @@ from typing import Optional
 from src.core.types import Side, Signal
 from src.risk.position_sizing import size_by_fixed_risk
 
+from .event_logger import EventLogger, NullEventLogger
 from .mt5_client import MT5Client
 
 logger = logging.getLogger(__name__)
@@ -30,16 +31,18 @@ class LivePosition:
     symbol: str
     side: Side
     entry_price: float
-    stop_loss: float
+    stop_loss: float                              # SL actual (lo modifica el trail)
     take_profit: float
     volume: float
     strategy_id: str
     atr_at_signal: float
     entry_time: datetime
+    original_stop_loss: float = field(init=False)  # SL inicial — preservado para close_reason
     highest_since_entry: float = field(init=False)
     lowest_since_entry: float = field(init=False)
 
     def __post_init__(self) -> None:
+        self.original_stop_loss = self.stop_loss
         self.highest_since_entry = self.entry_price
         self.lowest_since_entry = self.entry_price
 
@@ -51,11 +54,13 @@ class OrderManager:
         dry_run: bool = True,
         magic: int = 90210,
         deviation_points: int = 20,
+        event_logger: EventLogger | NullEventLogger | None = None,
     ):
         self.client = client
         self.dry_run = dry_run
         self.magic = magic
         self.deviation_points = deviation_points
+        self.event_logger = event_logger or NullEventLogger()
         if dry_run:
             logger.info("OrderManager en DRY-RUN — las órdenes se simulan")
 
@@ -73,14 +78,28 @@ class OrderManager:
         Abre posición de mercado respetando el risk sizing.
         Devuelve ticket si éxito, None si falla.
         """
-        volume = self._compute_volume(signal, account_balance, risk_pct)
-        if volume <= 0:
+        intended_volume = self._compute_volume(signal, account_balance, risk_pct)
+        if intended_volume <= 0:
             logger.warning(f"Volume 0 para señal {signal.symbol} — descartada")
+            self.event_logger.order(
+                strategy_id=strategy_id, symbol=signal.symbol, side=signal.side.value,
+                ticket=None, signal_entry=signal.entry_price, signal_sl=signal.stop_loss,
+                signal_tp=signal.take_profit, fill_price=None, volume=0.0,
+                intended_volume=intended_volume, slippage_pips=None, retcode=None,
+                comment="reject:zero_volume",
+            )
             return None
 
-        volume = self._round_to_lot_step(signal.symbol, volume)
+        volume = self._round_to_lot_step(signal.symbol, intended_volume)
         if volume <= 0:
             logger.warning(f"Volume ajustado a lote mínimo resultó 0 — descartada")
+            self.event_logger.order(
+                strategy_id=strategy_id, symbol=signal.symbol, side=signal.side.value,
+                ticket=None, signal_entry=signal.entry_price, signal_sl=signal.stop_loss,
+                signal_tp=signal.take_profit, fill_price=None, volume=0.0,
+                intended_volume=intended_volume, slippage_pips=None, retcode=None,
+                comment="reject:rounded_to_zero",
+            )
             return None
 
         if self.dry_run:
@@ -91,9 +110,16 @@ class OrderManager:
                 f"SL={signal.stop_loss:.5f} TP={signal.take_profit:.5f} "
                 f"strategy={strategy_id} ticket={ticket}"
             )
+            self.event_logger.order(
+                strategy_id=strategy_id, symbol=signal.symbol, side=signal.side.value,
+                ticket=ticket, signal_entry=signal.entry_price, signal_sl=signal.stop_loss,
+                signal_tp=signal.take_profit, fill_price=signal.entry_price, volume=volume,
+                intended_volume=intended_volume, slippage_pips=0.0, retcode=10009,
+                comment="dry_run",
+            )
             return ticket
 
-        return self._send_market_order(signal, volume, strategy_id)
+        return self._send_market_order(signal, volume, intended_volume, strategy_id)
 
     def modify_stop_loss(self, ticket: int, new_sl: float, new_tp: float | None = None) -> bool:
         """Modifica SL de una posición existente (usado por TrailManager)."""
@@ -186,12 +212,21 @@ class OrderManager:
 
     # ── Helpers internos ──────────────────────────────────────────────────────
 
-    def _send_market_order(self, signal: Signal, volume: float, strategy_id: str) -> Optional[int]:
+    def _send_market_order(
+        self, signal: Signal, volume: float, intended_volume: float, strategy_id: str
+    ) -> Optional[int]:
         self.client.ensure_connected()
         mt5 = self.client.raw
         tick = mt5.symbol_info_tick(signal.symbol)
         if tick is None:
             logger.error(f"Sin tick para {signal.symbol}")
+            self.event_logger.order(
+                strategy_id=strategy_id, symbol=signal.symbol, side=signal.side.value,
+                ticket=None, signal_entry=signal.entry_price, signal_sl=signal.stop_loss,
+                signal_tp=signal.take_profit, fill_price=None, volume=volume,
+                intended_volume=intended_volume, slippage_pips=None, retcode=None,
+                comment="reject:no_tick",
+            )
             return None
 
         if signal.side == Side.LONG:
@@ -215,14 +250,42 @@ class OrderManager:
             "type_filling": mt5.ORDER_FILLING_IOC,
         }
         result = mt5.order_send(request)
+
+        # Compute slippage in points (raw price diff in symbol's quote unit).
+        # Positive slippage = adverse (worse fill than signal price).
+        if signal.side == Side.LONG:
+            slippage_raw = price - signal.entry_price
+        else:
+            slippage_raw = signal.entry_price - price
+        info = mt5.symbol_info(signal.symbol)
+        point = float(info.point) if info is not None else 0.00001
+        slippage_pips = slippage_raw / point if point > 0 else None
+
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error(
                 f"OPEN fallo {signal.symbol} retcode={result.retcode} comment={result.comment}"
+            )
+            self.event_logger.order(
+                strategy_id=strategy_id, symbol=signal.symbol, side=signal.side.value,
+                ticket=None, signal_entry=signal.entry_price, signal_sl=signal.stop_loss,
+                signal_tp=signal.take_profit, fill_price=price, volume=volume,
+                intended_volume=intended_volume, slippage_pips=slippage_pips,
+                retcode=int(result.retcode), comment=str(result.comment),
+                bid_at_send=float(tick.bid), ask_at_send=float(tick.ask),
             )
             return None
         logger.info(
             f"OPEN OK ticket={result.order} {signal.side.value} {signal.symbol} "
             f"vol={volume} @ {price} SL={signal.stop_loss} TP={signal.take_profit}"
+        )
+        self.event_logger.order(
+            strategy_id=strategy_id, symbol=signal.symbol, side=signal.side.value,
+            ticket=int(result.order), signal_entry=signal.entry_price,
+            signal_sl=signal.stop_loss, signal_tp=signal.take_profit,
+            fill_price=price, volume=volume, intended_volume=intended_volume,
+            slippage_pips=slippage_pips, retcode=int(result.retcode),
+            comment=f"strat:{strategy_id[:32]}",
+            bid_at_send=float(tick.bid), ask_at_send=float(tick.ask),
         )
         return int(result.order)
 
