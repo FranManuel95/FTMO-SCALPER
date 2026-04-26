@@ -74,8 +74,8 @@ function Remove-ServiceIfExists($name) {
 Remove-ServiceIfExists "ftmo-dashboard"
 Write-Host "Instalando ftmo-dashboard..." -ForegroundColor Cyan
 
-& $NSSM install ftmo-dashboard "$VENV\streamlit.exe" `
-    "run dashboard/app.py --server.port 8501 --server.headless true --browser.gatherUsageStats false"
+& $NSSM install ftmo-dashboard "$VENV\python.exe" `
+    "-m streamlit run dashboard/app.py --server.port 8501 --server.headless true --browser.gatherUsageStats false"
 
 & $NSSM set ftmo-dashboard AppDirectory          $ROOT
 & $NSSM set ftmo-dashboard AppStdout             "$LOGS\dashboard-service.log"
