@@ -99,8 +99,7 @@ Write-Host "ftmo-dashboard instalado (arranque automatico)." -ForegroundColor Gr
 Remove-ServiceIfExists "ftmo-bot"
 Write-Host "Instalando ftmo-bot..." -ForegroundColor Cyan
 
-& $NSSM install ftmo-bot "$VENV\python.exe" `
-    "-m src.live.run_live --live --confirm `"I UNDERSTAND`""
+& $NSSM install ftmo-bot "$VENV\python.exe" '-m src.live.run_live --live --confirm "I UNDERSTAND"'
 
 & $NSSM set ftmo-bot AppDirectory          $ROOT
 & $NSSM set ftmo-bot AppStdout             "$LOGS\bot-service.log"
