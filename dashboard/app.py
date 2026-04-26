@@ -180,7 +180,7 @@ if open_tickets and not orders.empty:
             "Hora", "Estrategia", "Par", "Side", "Ticket",
             "Entry", "SL", "TP", "Lotes", "Slip(pips)",
         ]
-        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.dataframe(display, width="stretch", hide_index=True)
     else:
         st.info("Hay tickets abiertos en MT5 pero no tenemos orden registrada — posiciones recuperadas o pre-bot")
 else:
@@ -254,7 +254,7 @@ if not closes.empty:
         yaxis_title="Equity (€)",
         hovermode="x unified",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 else:
     st.info("Aún no hay trades cerrados para mostrar equity")
 

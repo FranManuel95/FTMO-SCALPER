@@ -48,7 +48,7 @@ else:
     if not sl_stats.empty:
         c1, c2 = st.columns([1, 2])
         with c1:
-            st.dataframe(sl_stats, use_container_width=True)
+            st.dataframe(sl_stats, width="stretch")
         with c2:
             df_sl = orders.dropna(subset=["slippage_pips"])
             fig = px.box(
@@ -63,7 +63,7 @@ else:
                 yaxis_title="Slippage (pips, + = adverso)",
                 xaxis_title="",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
 
 # ── Quick-stop rate ────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ else:
 
     c1, c2 = st.columns([1, 2])
     with c1:
-        st.dataframe(qs_display, use_container_width=True)
+        st.dataframe(qs_display, width="stretch")
     with c2:
         fig = px.bar(
             qs.reset_index(), x="strategy_id", y="quick_pct",
@@ -96,7 +96,7 @@ else:
         fig.add_hline(y=50, line_dash="dash", line_color="orange",
                       annotation_text="50% (alerta)", annotation_position="right")
         fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), coloraxis_showscale=False)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 
 # ── Distribución de duración ───────────────────────────────────────────────────
@@ -116,7 +116,7 @@ if not closes.empty and "duration_seconds" in closes.columns:
         color_discrete_map={"Ganadora": "#2ca02c", "Perdedora": "#d62728"},
     )
     fig.update_layout(margin=dict(l=10, r=10, t=10, b=10))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ── Comportamiento del trail ───────────────────────────────────────────────────
@@ -140,7 +140,7 @@ else:
     if not skip_reasons.empty:
         st.markdown("**Motivos de skip más frecuentes**")
         skip_df = skip_reasons.rename_axis("Motivo").reset_index(name="Conteo")
-        st.dataframe(skip_df, use_container_width=True, hide_index=True)
+        st.dataframe(skip_df, width="stretch", hide_index=True)
 
 
 # ── Latencias del runner ───────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ else:
                 height=300, title="Tiempo de fetch de barras",
             )
             fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         with c2:
             fig = px.histogram(
                 last_24h, x="generator_ms", nbins=30,
@@ -171,13 +171,13 @@ else:
                 height=300, title="Tiempo de generador",
             )
             fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         # Errores recientes
         errors = last_24h[last_24h["error"].notna() & (last_24h["error"] != "")]
         if not errors.empty:
             st.markdown("**❌ Errores recientes en strategy_tick**")
             err_table = errors[["ts", "strategy_id", "error"]].sort_values("ts", ascending=False).head(20)
-            st.dataframe(err_table, use_container_width=True, hide_index=True)
+            st.dataframe(err_table, width="stretch", hide_index=True)
         else:
             st.success("Sin errores en últimas 24h")

@@ -157,7 +157,7 @@ if order_event is not None and not trail_events.empty:
         yaxis_title="Precio",
         hovermode="x unified",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 else:
     st.info("Sin eventos de trail registrados para este trade")
 

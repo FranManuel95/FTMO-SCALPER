@@ -59,7 +59,7 @@ if not stats.empty:
     display["total_commission"] = display["total_commission"].round(2)
     display.columns = ["Trades", "W", "L", "WR", "PF", "Net €", "Expectancy €",
                        "MaxDD €", "Avg W €", "Avg L €", "Comm €", "Último"]
-    st.dataframe(display, use_container_width=True)
+    st.dataframe(display, width="stretch")
 
 
 # ── Curva de equity por estrategia ─────────────────────────────────────────────
@@ -83,7 +83,7 @@ if curves:
     )
     fig.add_hline(y=0, line_dash="dash", line_color="gray", line_width=1)
     fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), legend_title="")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ── Funnel de señales ──────────────────────────────────────────────────────────
@@ -117,19 +117,19 @@ else:
                 yaxis_title="Nº de señales",
                 xaxis_title="",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         with col_r:
             st.markdown("**Tasa de ejecución**")
             st.dataframe(
                 funnel[["strategy_id", "total", "executed", "execution_rate_str"]]
                 .set_index("strategy_id"),
-                use_container_width=True,
+                width="stretch",
             )
 
     rej = metrics.rejection_reasons(signals)
     if not rej.empty:
         st.markdown("**Motivos de rechazo**")
-        st.dataframe(rej, use_container_width=True, hide_index=True)
+        st.dataframe(rej, width="stretch", hide_index=True)
 
 
 # ── Drift: últimos N vs histórico ──────────────────────────────────────────────
@@ -149,7 +149,7 @@ else:
         lambda d: f"{fmt.trend_arrow(d, 5)} {d:+.1f}pp"
     )
     drift_display.columns = ["WR histórico", "WR reciente", "Δ", "N total", "N reciente"]
-    st.dataframe(drift_display, use_container_width=True)
+    st.dataframe(drift_display, width="stretch")
 
 
 # ── Trades recientes por estrategia (sparkline-ish) ───────────────────────────

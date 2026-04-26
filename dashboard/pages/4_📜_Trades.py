@@ -107,7 +107,7 @@ if not filtered.empty:
         showlegend=False,
     )
     fig.add_hline(y=0, line_color="black", line_width=1)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ── Curva de equity ────────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ if not eq.empty:
         yaxis_title="Equity (€)",
         showlegend=False,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ── Tabla detallada ────────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ display.columns = [
     "MFE %", "MAE %",
     "PnL €", "Comm €", "Swap €", "Net €",
 ][:len(cols_display)]
-st.dataframe(display, use_container_width=True, hide_index=True, height=400)
+st.dataframe(display, width="stretch", hide_index=True, height=400)
 
 # CSV export
 csv = filtered.to_csv(index=False)
