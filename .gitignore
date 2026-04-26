@@ -59,3 +59,6 @@ build/
 # Temporales
 txt.txt
 .coverage
+
+# NSSM binary (descargado localmente por install_services.ps1)
+scripts/services/nssm.exe
