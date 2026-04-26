@@ -61,7 +61,10 @@ function Remove-ServiceIfExists($name) {
     $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
     if ($svc) {
         Write-Host "Eliminando servicio existente '$name'..." -ForegroundColor Yellow
-        & $NSSM stop $name 2>$null
+        $prev = $ErrorActionPreference
+        $ErrorActionPreference = "SilentlyContinue"
+        & $NSSM stop $name 2>&1 | Out-Null
+        $ErrorActionPreference = $prev
         Start-Sleep -Seconds 2
         & $NSSM remove $name confirm
     }
