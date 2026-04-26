@@ -22,24 +22,37 @@ if (-not $isAdmin) {
 
 $ROOT      = "C:\ftmo-scalper"
 $VENV      = "$ROOT\.venv\Scripts"
-$NSSM      = "$ROOT\scripts\services\nssm.exe"
 $LOGS      = "$ROOT\logs"
 
 # ── Crear directorio de logs ───────────────────────────────────────────────────
 
 New-Item -ItemType Directory -Force -Path $LOGS | Out-Null
 
-# ── Descargar NSSM si no está presente ────────────────────────────────────────
+# ── Localizar NSSM (winget/choco/PATH o descarga) ─────────────────────────────
 
-if (-not (Test-Path $NSSM)) {
+$NSSM = "$ROOT\scripts\services\nssm.exe"
+
+# Primero buscar en PATH (instalado via winget o choco)
+$nssmInPath = Get-Command nssm -ErrorAction SilentlyContinue
+if ($nssmInPath) {
+    $NSSM = $nssmInPath.Source
+    Write-Host "NSSM encontrado en PATH: $NSSM" -ForegroundColor Green
+} elseif (-not (Test-Path $NSSM)) {
     Write-Host "Descargando NSSM..." -ForegroundColor Cyan
     $zip = "$env:TEMP\nssm.zip"
     $extract = "$env:TEMP\nssm-extract"
-    Invoke-WebRequest "https://nssm.cc/release/nssm-2.24.zip" -OutFile $zip
-    Expand-Archive $zip -DestinationPath $extract -Force
-    Copy-Item "$extract\nssm-2.24\win64\nssm.exe" $NSSM
-    Remove-Item $zip, $extract -Recurse -Force
-    Write-Host "NSSM listo." -ForegroundColor Green
+    try {
+        Invoke-WebRequest "https://nssm.cc/release/nssm-2.24.zip" -OutFile $zip
+        Expand-Archive $zip -DestinationPath $extract -Force
+        Copy-Item "$extract\nssm-2.24\win64\nssm.exe" $NSSM
+        Remove-Item $zip, $extract -Recurse -Force
+        Write-Host "NSSM descargado." -ForegroundColor Green
+    } catch {
+        Write-Error "No se pudo descargar NSSM. Instálalo con: winget install nssm"
+        exit 1
+    }
+} else {
+    Write-Host "NSSM encontrado en: $NSSM" -ForegroundColor Green
 }
 
 # ── Función auxiliar ───────────────────────────────────────────────────────────

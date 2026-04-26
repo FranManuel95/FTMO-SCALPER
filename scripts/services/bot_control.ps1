@@ -13,7 +13,8 @@ param(
     [string]$Action
 )
 
-$NSSM = "C:\ftmo-scalper\scripts\services\nssm.exe"
+$nssmInPath = Get-Command nssm -ErrorAction SilentlyContinue
+$NSSM = if ($nssmInPath) { $nssmInPath.Source } else { "C:\ftmo-scalper\scripts\services\nssm.exe" }
 $LOGS = "C:\ftmo-scalper\logs"
 
 switch ($Action) {
