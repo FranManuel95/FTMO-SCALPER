@@ -45,9 +45,16 @@ class TrailManager:
             df = latest_bars.get(pos.symbol)
             if df is None or df.empty:
                 continue
-            last = df.iloc[-1]
-            pos.highest_since_entry = max(pos.highest_since_entry, float(last["high"]))
-            pos.lowest_since_entry  = min(pos.lowest_since_entry,  float(last["low"]))
+
+            # Only use bars that closed AFTER the position was opened.
+            # Using the signal bar's intrabar high/low would move the SL to within
+            # centimes of the entry price before the position has a chance to develop.
+            bars_after = df[df.index > pd.Timestamp(pos.entry_time)]
+            if bars_after.empty:
+                continue
+
+            pos.highest_since_entry = max(pos.highest_since_entry, float(bars_after["high"].max()))
+            pos.lowest_since_entry  = min(pos.lowest_since_entry,  float(bars_after["low"].min()))
 
             new_sl = self._compute_trail_sl(pos)
             if new_sl is None:

@@ -80,7 +80,7 @@ def test_trail_manager_moves_sl_up_for_long():
         entry_price=2000.0, stop_loss=1990.0, take_profit=2025.0,
         volume=0.1, strategy_id="test",
         atr_at_signal=4.0,
-        entry_time=datetime.now(timezone.utc),
+        entry_time=datetime(2024, 1, 1, 9, 0, tzinfo=timezone.utc),  # before test bar
     )
     df = pd.DataFrame({
         "open": [2000.0], "high": [2010.0], "low": [1998.0], "close": [2008.0], "volume": [100],
@@ -108,7 +108,7 @@ def test_trail_manager_never_relaxes_sl():
         entry_price=2000.0, stop_loss=2005.0, take_profit=2025.0,
         volume=0.1, strategy_id="test",
         atr_at_signal=4.0,
-        entry_time=datetime.now(timezone.utc),
+        entry_time=datetime(2024, 1, 1, 9, 0, tzinfo=timezone.utc),  # before test bar
     )
     pos.highest_since_entry = 2010.0
     # Nueva barra con high menor que el pico anterior
