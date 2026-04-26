@@ -374,3 +374,152 @@ Skills in `skills/` are prompt templates for specific research tasks:
 - `build_feature_pipeline.md` — scaffolds a new feature/indicator
 
 When reviewing backtest results, always check: PF stability IS→OOS, per-window OOS consistency, Monte Carlo P(DD>10%), and whether trade count is statistically sufficient (≥30 trades per period).
+
+## Live Trading System
+
+### Arquitectura completa
+
+```
+Windows PC (MT5 machine)
+─────────────────────────────────────────────────────────────
+  start_bot.bat (doble click en escritorio)
+    └─ python -m src.live.run_live --live --confirm "I UNDERSTAND"
+         │
+         ├─ PortfolioRunner.tick() cada 30s
+         │    ├─ MT5 bars → signal generators → orders
+         │    ├─ TrailManager.update_all() (trailing stops)
+         │    ├─ _maybe_check_anomalies() cada 30 min
+         │    └─ _maybe_send_weekly_report() domingos 08:00 UTC
+         │
+         ├─ Background thread: _listen_telegram_commands() cada 5s
+         │    ├─ /stop  → para el bot limpiamente
+         │    └─ /status → responde con posiciones y balance
+         │
+         ├─ escribe → data/events.db  (SQLite, indexado)
+         └─ escribe → data/events.jsonl (backup append-only)
+                           │
+  ftmo-dashboard (servicio Windows, auto-start)
+    └─ streamlit run dashboard/app.py
+         └─ lee data/events.db en modo read-only
+              └─ http://localhost:8501 (PC)
+              └─ http://100.80.131.15:8501 (Tailscale, móvil/remoto)
+─────────────────────────────────────────────────────────────
+```
+
+### Archivos clave del sistema live
+
+| Archivo | Responsabilidad |
+|---------|----------------|
+| `src/live/run_live.py` | Entry point CLI (`--live`, `--check`, `--dry-run`, `--no-events`) |
+| `src/live/portfolio_runner.py` | Loop principal, trail, guards, anomaly check, weekly report |
+| `src/live/trail_manager.py` | Trailing stop bar-by-bar. **BUG CRÍTICO CORREGIDO:** usar solo barras DESPUÉS de `entry_time` (`bars_after = df[df.index > pd.Timestamp(pos.entry_time)]`). Si se incluye la barra de señal el trailing arranca con el low intrabar y puede disparar inmediatamente. |
+| `src/live/order_manager.py` | MT5 orders, `LivePosition`, slippage medido en pips |
+| `src/live/event_logger.py` | Dual-write JSONL+SQLite, thread-safe, 8 tipos de evento |
+| `src/live/notifier.py` | Telegram send+receive. `get_commands()` sondea getUpdates. |
+| `src/live/live_data_loader.py` | Descarga barras cerradas de MT5 en UTC |
+
+### Bug del trail manager (corregido, no reintroducir)
+
+**Síntoma:** 45% de trades cerraban en < 5 minutos como "quick-stop".
+
+**Causa:** `TrailManager` usaba `df.iloc[-1]` para inicializar `highest/lowest_since_entry`. La barra de señal es la misma barra en la que se abre la posición — su `low` intrabar ya está por debajo del precio de entrada para una SELL, por lo que `trail_sl = bar_low + ATR×mult` queda por encima del entry y cualquier tick al alza dispara el SL.
+
+**Fix:** Filtrar solo las barras cerradas DESPUÉS de `entry_time`:
+```python
+bars_after = df[df.index > pd.Timestamp(pos.entry_time)]
+if bars_after.empty:
+    continue  # No hay barras nuevas desde la entrada — esperar
+```
+
+### Recuperación de posiciones al reinicio
+
+Al arrancar, `_recover_open_positions()` escanea MT5 buscando posiciones abiertas con el magic number. Para cada una reconstruye `LivePosition` con el `highest/lowest_since_entry` correcto consultando las barras históricas desde `entry_time`. Así el trailing retoma sin interrupciones aunque el bot se reinicie.
+
+### EventLogger — tipos de evento
+
+Todos los eventos tienen: `event_id`, `ts` (ISO UTC), `ts_unix`, `event_type`, `strategy_id`, `symbol`, `ticket`, `payload` (JSON).
+
+| event_type | Cuándo | Campos clave en payload |
+|-----------|--------|------------------------|
+| `strategy_tick` | Cada iteración por estrategia | `n_bars`, `fetch_ms`, `generator_ms`, `n_signals`, `n_executed`, `error` |
+| `signal` | Cada señal generada | `side`, `entry_price`, `stop_loss`, `take_profit`, `was_executed`, `filter_reason` |
+| `guard_check` | Cuando un guard bloquea | `guard_name`, `triggered`, `reason` |
+| `order` | Orden enviada a MT5 | `fill_price`, `slippage_pips`, `volume`, `intended_volume` |
+| `trail_update` | Cada evaluación de trail | `applied`, `new_sl`, `skip_reason` |
+| `position_close` | Cierre detectado | `pnl`, `net`, `duration_seconds`, `close_reason`, `mfe`, `mae` |
+| `system_event` | bot_start/stop, mt5_disconnect, position_recovered, weekly_report_sent | variado |
+| `market_snapshot` | Cada minuto | `balance`, `equity`, `n_open_positions`, `daily_pnl` |
+
+`close_reason` inferido comparando `exit_price` con `original_sl` / `stop_loss` (trail) / `take_profit` con tolerancia 5%.
+
+### Dashboard — páginas
+
+```
+dashboard/
+  app.py                    # Overview: balance, equity, FTMO progress, posiciones abiertas
+  lib/
+    data.py                 # SQLite loaders con @st.cache_data(ttl=30)
+    metrics.py              # Cálculos puros (sin streamlit): trade_summary, detect_anomalies, etc.
+    formatting.py           # fmt_eur, fmt_pct, fmt_pips, fmt_duration, severity_color
+  pages/
+    2_Strategies.py         # PF/WR/expectancy por estrategia, drift detector
+    3_Execution.py          # Slippage, quick-stop rate, latencias
+    4_Trades.py             # Histórico filtrable, curva equity, CSV download
+    5_Inspector.py          # Timeline completa de un ticket (SL/TP/trail + JSON)
+    6_Anomalies.py          # Detección automática con severidad y recomendaciones
+```
+
+`detect_anomalies(closes_df, orders_df)` detecta: quick-stop rate > 50%, racha 4+ pérdidas, slippage Z-score > 2.5, lot size 3σ. Esta misma función la llama `PortfolioRunner._check_and_alert_anomalies()` cada 30 minutos para alertas Telegram.
+
+### Telegram — comandos y alertas automáticas
+
+| Trigger | Mensaje |
+|---------|---------|
+| `/stop` | Para el bot limpiamente (via `threading.Event`) |
+| `/status` | Responde con posiciones abiertas y balance |
+| Anomalía high/medium | Alerta inmediata con título y detalle. Dedup por `category:title` para no repetir. |
+| Domingo ≥ 08:00 UTC | Resumen semanal: trades, WR, P&L, desglose por estrategia, balance actual |
+
+El polling de comandos es un daemon thread que usa `_stop_event.wait(timeout=5)` — se detiene automáticamente al parar el bot.
+
+### Infraestructura Windows
+
+**Servicio ftmo-dashboard** (auto-start con Windows):
+```
+NSSM → C:\ftmo-scalper\.venv\Scripts\python.exe -m streamlit run dashboard/app.py ...
+Logs: C:\ftmo-scalper\logs\dashboard-service.log
+```
+
+**Bot** (arranque manual, requiere sesión de usuario para MT5):
+```
+Acceso directo en escritorio → scripts/services/start_bot.bat
+```
+El bot NO puede ser servicio SYSTEM porque MT5 corre en la sesión del usuario y los procesos de distintas cuentas no comparten la comunicación IPC de MT5.
+
+**Scripts de gestión:**
+- `scripts/services/install_services.ps1` — instala/reinstala ambos servicios (requiere Admin)
+- `scripts/services/uninstall_services.ps1` — elimina los servicios
+- `scripts/services/start_bot.bat` — lanzador del bot (acceso directo en escritorio)
+- `scripts/services/bot_control.ps1 {start|stop|status|logs}` — control desde PowerShell
+
+**Acceso remoto:** Tailscale VPN. PC: `100.80.131.15`, móvil: `100.114.199.116`. Dashboard accesible en `http://100.80.131.15:8501` desde cualquier red.
+
+### Variables de entorno (.env)
+
+```
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+MT5_LOGIN=...
+MT5_PASSWORD=...
+MT5_SERVER=...
+FTMO_EVENTS_DB=data/events.db       # opcional, default
+FTMO_EVENTS_JSONL=data/events.jsonl # opcional, default
+```
+
+### Próximas mejoras pendientes
+
+- **Filtro de noticias**: bloquear señales 30 min antes/después de eventos macro (calendario económico API). Especialmente relevante para EURGBP (0W/4L semana 1).
+- **VPS dashboard (Nivel 2)**: mover Streamlit a un VPS Linux barato (€5/mes), sincronizar `events.db` cada minuto vía rsync sobre Tailscale. Dashboard siempre accesible aunque el PC del bot se reinicie.
+- **EURGBP monitoring**: la estrategia es CONDITIONAL PASS (5/6 OOS). Monitorear si W3 (convergencia BoE/ECB) se repite en 2026.
+- **Notificación de inicio de semana**: lunes 07:00 UTC — recordatorio de qué estrategias están activas y el estado de los guards.
+
