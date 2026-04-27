@@ -5,7 +5,7 @@
 
 ---
 
-## Portfolio Activo (20 estrategias)
+## Portfolio Activo (21 estrategias)
 
 ### Parámetros de cada estrategia en el live runner
 
@@ -30,6 +30,8 @@
 | 17 | nzdusd_asian_orb_1h | NZDUSD | 1h | 0.3% | 0.2 | 8.731* | 65–80% | 6/6 | 0.4% |
 | 18 | usdcad_asian_orb_1h | USDCAD | 1h | 0.3% | 0.2 | 8.505* | 65–75% | 6/6 | 0.2% |
 | 19 | gbpusd_asian_orb_1h | GBPUSD | 1h | 0.3% | 0.2 | 6.916* | 65–72% | 6/6 | 0.8% |
+| 20 | eurusd_asian_orb_1h | EURUSD | 1h | 0.3% | 0.2 | 4.525* | 65–70% | 6/6 | 0.9% |
+| 21 | usdchf_asian_orb_1h | USDCHF | 1h | 0.3% | 0.2 | 7.225* | 65–72% | 6/6 | 0.7% |
 
 > `*` = PF ajustado con comisión ($7/lot forex, $35/lot XAUUSD)  
 > PF sin `*` = sin comisión (estrategia validada antes de la modelización de costes)
@@ -45,10 +47,11 @@
 | Pullbacks 1h | 4 | 0.4+0.4+0.3+0.3 = **1.4%** |
 | London ORBs 15m | 5 | 5 × 0.25 = **1.25%** |
 | NY ORBs 15m | 3 | 3 × 0.25 = **0.75%** |
-| Asian ORBs 1h | 7 | 7 × 0.3 = **2.1%** |
-| **TOTAL TEÓRICO** | 19 | **5.5%** |
+| Asian ORBs 1h | 9 | 9 × 0.3 = **2.7%** |
+| **TOTAL TEÓRICO** | 21 | **6.1%** |
 
-> El DailyLossGuard para en -5% antes de alcanzar el máximo teórico.
+> El DailyLossGuard para en -5% antes de alcanzar el máximo teórico.  
+> En la práctica nunca se alcanza el máximo: no todas las estrategias generan señal el mismo día ni en la misma dirección.
 
 ### Exposición diaria realista
 
@@ -70,11 +73,11 @@ No todas las estrategias generan señal cada día. Según datos históricos:
 | USDCAD | NY ORB + Asian ORB (2) | 0.25+0.3 = **0.55%** |
 | NZDUSD | Pullback + Asian ORB (2) | 0.3+0.3 = **0.6%** |
 | USDJPY | Pullback + Asian ORB (2) | 0.3+0.3 = **0.6%** |
-| EURUSD | London ORB (1) | **0.25%** |
+| EURUSD | London ORB + Asian ORB (2) | **0.55%** |
+| USDCHF | London ORB + Asian ORB (2) | **0.55%** |
 | EURJPY | Asian ORB (1) | **0.3%** |
 | AUDUSD | Asian ORB (1) | **0.3%** |
 | EURGBP | London ORB (1) | **0.25%** |
-| USDCHF | London ORB (1) | **0.25%** |
 
 ---
 
@@ -231,7 +234,9 @@ Estimaciones basadas en Monte Carlo OOS (medianas):
 | nzdusd_asian_orb_1h | $900 | ~$150 |
 | usdcad_asian_orb_1h | $1,121 | ~$187 |
 | gbpusd_asian_orb_1h | $2,040 | ~$340 |
-| **TOTAL PORTFOLIO** | **~$20,545** | **~$3,424/mes** |
+| eurusd_asian_orb_1h | $1,412 | ~$235 |
+| usdchf_asian_orb_1h | $1,542 | ~$257 |
+| **TOTAL PORTFOLIO** | **~$23,499** | **~$3,916/mes** |
 
 > Advertencia: estas son medianas Monte Carlo OOS de estrategias probadas por separado. En portfolio real, las correlaciones y el DailyLossGuard reducirán tanto las ganancias como las pérdidas. Estimación realista portfolio: 50-70% del total independiente = ~$1,700-$2,400/mes en $10k.
 
