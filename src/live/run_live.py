@@ -218,7 +218,7 @@ def build_default_portfolio() -> list[StrategyConfig]:
         StrategyConfig(
             strategy_id="xauusd_london_orb_15m",
             symbol="XAUUSD", timeframe="15m",
-            risk_pct=0.0025, trail_atr_mult=0.5,
+            risk_pct=0.0025, trail_atr_mult=0.3,  # trail sweep: 0.3 → PF 2.905 6/6 (comm-adj); 0.5 daba PF 1.534 5/6
             generator=build_xauusd_london_orb_15m(),
         ),
         StrategyConfig(
@@ -266,7 +266,7 @@ def build_default_portfolio() -> list[StrategyConfig]:
         StrategyConfig(
             strategy_id="eurgbp_london_orb_15m",
             symbol="EURGBP", timeframe="15m",
-            risk_pct=0.0025, trail_atr_mult=0.4,     # 6/6 OOS, PF 4.967, DD p95 0.5% — W3 BoE/ECB convergence NO afecta
+            risk_pct=0.0025, trail_atr_mult=0.3,     # 6/6 OOS, PF 2.742 (comm-adj); trail sweep: 0.4→PF 1.982, 0.3→PF 2.742 — skip on BoE/ECB days
             generator=build_eurgbp_london_orb_15m(),
         ),
         StrategyConfig(
