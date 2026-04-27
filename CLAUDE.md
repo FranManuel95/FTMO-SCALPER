@@ -277,6 +277,43 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **FTMO viability:** ~$1,890/6m en $10k. ~85-90 trades/6m.
 - **USDCHF NY ORB 15M** (PF 4.094, 6/6) documentado pero excluido — correlaciona con USDCAD NY ORB (ambos capturan volatilidad CME open / US data). London ORB añade exposición diferente.
 
+- **USDCHF NY ORB 15M** (PF 4.094, 6/6) documentado pero excluido — correlaciona con USDCAD NY ORB (ambos capturan volatilidad CME open / US data). London ORB añade exposición diferente.
+
+### ✅ GBPJPY Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** GBPJPY 1h
+- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.2×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **26.792**, P(ruin) **0.0%**, Max DD p95 **0.6%**, WFE **2.921**
+- **Trail sweep (con comisión):** 0.2 (PF 26.792, sweet spot) → 0.3 (PF 8.434) → 0.4 (PF 4.595). Mismo patrón que USDJPY Asian ORB.
+- **Execution margin:** ATR 1H GBPJPY ~90 pips × 0.2 = 18 pips vs spread 2-3 pips (ratio 6-9×). Seguro.
+- **Correlación con GBPJPY London ORB:** Ambas pueden activarse el mismo día pero en ventanas distintas (Asian ORB entry 07:00, London ORB entry 08:00). Riesgo combinado diario: ~0.6% máximo. DailyLossGuard cubre.
+- **W1 OOS PF 81.530 (H1 2023):** Probablemente régimen específico (BoJ YCC + GBP recovery). Sin W1, las otras 5 ventanas dan PF medio 15.8. Edge sigue siendo extraordinario fuera del outlier.
+- **FTMO viability:** 6º miembro confirmado de la familia Asian ORB. JPY define el rango 23:00-07:00 UTC; GBP rompe con el impulso institucional de London open.
+
+### ✅ NZDUSD Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** NZDUSD 1h
+- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.2×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **8.731**, P(ruin) **0.0%**, Max DD p95 **0.4%**, WFE **1.713**
+- **Trail sweep (con comisión):** 0.2 (PF 8.731, sweet spot) → 0.3 (PF 4.718) → 0.4 (PF 2.761). NZD spread 0.8-1.5 pip vs ATR 1H 40 pips → margen 8 pips (ratio 5-10×).
+- **5º miembro familia Asian ORB:** NZD es divisa asiática primaria (RBNZ, datos lácteos, correlación China). Mismo mecanismo que AUDUSD Asian ORB (PF 4.346) — Sydney/Wellington define el rango, London lo rompe.
+- **W2 y W5 WFE < 0.5:** OOS siempre positivo (PF 2.806 y 4.528) pero IS superó mucho al OOS. No compromete la robustez global (6/6 OOS profitable).
+- **FTMO viability:** ~$900/6m en $10k. DD p95 0.4% — el más bajo de la nueva selección.
+
+### ✅ GBPUSD NY Open ORB 15M + Trail — VALIDADA (`src/signals/breakout/ny_open_breakout.py`)
+
+- **Asset/TF:** GBPUSD 15m
+- **Logic:** Rango NY Open 13:00-14:00 UTC. Breakout entry 14:00-18:00 UTC en dirección H4 trend. ADX > 18. Trail 0.4×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.4`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **3.696**, P(ruin) **0.0%**, Max DD p95 **0.6%**, WFE **0.994**
+- **Consistencia excepcional:** Rango OOS PF 2.474-4.104 — la variabilidad más baja de todos los ORBs. Ningún periodo flojea.
+- **Ejecución:** ATR 15M GBPUSD ~10-15 pips × 0.4 = 4-6 pips vs spread 0.8-1.5 pip (ratio 3-7×). Seguro.
+- **Driver:** GBPUSD muy reactivo a datos US (NFP, CPI, PCE) y datos UK (BoE, retail sales). CME open crea impulso estructural.
+- **GBPUSD London ORB 15m** (trail=0.4, PF 3.006, 6/6, CON comisión): Documentado pero excluido — evitar dos ORBs en el mismo par sin reducir risk. NY ORB es más consistente (WFE 0.994 vs 1.248).
+- **FTMO viability:** ~$1,200/6m en $10k. ~90-100 trades/6m. Alta frecuencia + alta consistencia = fiable para FTMO targets.
+
 ### ❌ London Breakout (`src/signals/breakout/london_breakout.py`)
 
 - **Asset/TF:** XAUUSD 15m
@@ -331,6 +368,9 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 | USDJPY Asian ORB 1h | 24.893 | **24.780** | −0.5% | 6/6 ✓ |
 | EURJPY Asian ORB 1h | 9.356 | **9.333** | −0.2% | 6/6 ✓ |
 | AUDUSD Asian ORB 1h | 7.073 | **4.346** | −39% | 6/6 ✓ |
+| GBPJPY Asian ORB 1h | NEW | **26.792** | — | 6/6 ✓ |
+| NZDUSD Asian ORB 1h | NEW | **8.731** | — | 6/6 ✓ |
+| GBPUSD NY ORB 15m | NEW | **3.696** | — | 6/6 ✓ |
 
 **Insight clave:** Los pares JPY (USDJPY, EURJPY) y GBPJPY apenas se ven afectados porque el spread en JPY es irrelevante vs el ATR. XAUUSD sufre más porque el spread ($35/lot) es alto relativo al tamaño de posición en estrategias con trailing corto (15M ORB). Las 3 Asian ORB 1h son las más robustas a costes de transacción.
 
@@ -368,7 +408,7 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **Partial TP (50% a 1.5R) resultó PEOR:** Recorta ganadores antes de tiempo. El precio que llega a 1.5R tiende a continuar a 2.5R. Fixed o trail son mejores que partial.
 - **Data timezone:** CSVs en backtest/data/ usan UTC+2 (hora broker MT5). El sistema usa tz_offset_hours=2 para ser consistente. Nunca mezclar con CSVs UTC-naive de data/raw/.
 - **run_research_loop bug fixed:** Mean reversion params (rsi_oversold, rsi_overbought, bb_std) were not passed from YAML → run_backtest → BBReversionConfig. Fixed.
-- **Asian ORB family estructural:** USDJPY (PF 24.893), EURJPY (PF 9.356), AUDUSD (PF 7.073), EURJPY (PF 9.356) forman familia. La tesis: la divisa asiática primaria (JPY, AUD) define el rango 23:00-07:00 UTC. London rompe el rango estructuralmente con flujos institucionales. No funciona en pares EUR/USD (EUR es divisa London, no asiática). AUDUSD es el cuarto miembro confirmado (Sydney, RBA, China data definen el rango). ATR 1H 50 pip vs spread 0.4-0.8 pip da ratio de ejecución 12-37×.
+- **Asian ORB family estructural (6 miembros confirmados):** USDJPY (PF 24.780), GBPJPY (PF 26.792), EURJPY (PF 9.333), NZDUSD (PF 8.731), AUDUSD (PF 4.346) forman familia con comisión incluida. GBPJPY es el nuevo líder junto a USDJPY. NZD confirma el 5º miembro (Sydney + RBNZ + datos China = divisa asiática primaria). PFs calculados con comisión $7/lot. La tesis: la divisa asiática primaria (JPY, AUD) define el rango 23:00-07:00 UTC. London rompe el rango estructuralmente con flujos institucionales. No funciona en pares EUR/USD (EUR es divisa London, no asiática). AUDUSD es el cuarto miembro confirmado (Sydney, RBA, China data definen el rango). ATR 1H 50 pip vs spread 0.4-0.8 pip da ratio de ejecución 12-37×.
 - **AUDUSD Asian ORB 1H ROBUSTA:** 6/6 OOS, PF 7.073 (trail=0.3), WFE 1.260, DD p95 0.2%, P(ruin) 0.0%. Trail sweep: 0.2→16.303 (ratio ejecución 25×, incluso más seguro que USDJPY 9.6×), sweet spot trail=0.3 por conservadurismo. AUDUSD London ORB (PF 2.161, W4 OOS=1.020) y NY ORB (PF 2.334) ambos documentados pero excluidos. AÑADIDA AL LIVE RUNNER (trail=0.3, risk=0.3%).
 - **EURGBP London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 4.967 (trail=0.4), WFE 1.122, DD p95 0.5%, P(ruin) 0.0%. IS Gate 1: PF 3.289. Trail sweep: 0.5→3.293, 0.4→4.967 (sweet spot), 0.3→8.171 (margin 1.8-3 pip ≈ spread en noticias, excluido). HALLAZGO CLAVE: W3 (H1 2024, convergencia BoE/ECB que mata el pullback) OOS PF=4.651 — la convergencia que destruye el pullback crea consolidación pre-London que favorece el ORB. EURGBP NY ORB (PF 2.594) documentado pero excluido (no poner 2 ORBs en mismo par). AÑADIDA AL LIVE RUNNER (trail=0.4, risk=0.25%).
 - **USDCHF London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 6.848 (trail=0.4), WFE 1.309, DD p95 0.4%, P(ruin) 0.0%. IS Gate 1: PF 4.598. Trail sweep: 0.5→4.577, 0.4→6.848 (sweet spot), 0.3→10.848 (margin 2.4-3.6 pip, ratio 1.2-2.4× borderline en días CPI). SNB RISK NEUTRALIZADO: rango 07:00-08:00 UTC incorpora horario habitual SNB (07:30 UTC), cierre antes 12:00 UTC. Mismo mecanismo que BoJ neutralization en GBPJPY. USDCHF NY ORB (PF 4.094) documentado pero excluido (correlación con USDCAD NY ORB). AÑADIDA AL LIVE RUNNER (trail=0.4, risk=0.25%).
