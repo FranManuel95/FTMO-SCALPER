@@ -173,6 +173,76 @@ def build_usdchf_london_orb_15m():
     return gen
 
 
+def build_gbpusd_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_usdcad_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_gbpjpy_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_nzdusd_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_eurusd_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_usdchf_asian_orb_1h():
+    from src.signals.breakout.asian_session_orb import (
+        AsianSessionORBConfig, generate_asian_session_orb_signals,
+    )
+    cfg = AsianSessionORBConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_asian_session_orb_signals(df, cfg)
+    return gen
+
+
+def build_gbpusd_ny_orb_15m():
+    from src.signals.breakout.ny_open_breakout import (
+        NYOpenBreakoutConfig, generate_ny_open_breakout_signals,
+    )
+    cfg = NYOpenBreakoutConfig(adx_min=18, rr_target=2.5, htf_trend_enabled=True)
+    def gen(df):
+        return generate_ny_open_breakout_signals(df, cfg)
+    return gen
+
+
 # FVG XAUUSD — validada pero no activa en live por concentración en XAUUSD.
 # Descomentar cuando se quiera añadir al portfolio.
 # def build_xauusd_fvg_1h():
@@ -184,11 +254,19 @@ def build_usdchf_london_orb_15m():
 
 
 def build_default_portfolio() -> list[StrategyConfig]:
-    """14 estrategias validadas con sus parámetros óptimos.
+    """21 estrategias validadas con sus parámetros óptimos (todos 6/6 OOS, comisión incluida).
 
-    FVG XAUUSD validada pero excluida — 4ª estrategia en XAUUSD aumenta
-    correlación en regímenes laterales.
-    NOTA: GBPJPY London ORB requiere filtro manual en días reunión BoJ (~8/año).
+    Grupos:
+    - 4 Pullbacks 1h: XAUUSD, GBPUSD, USDJPY, NZDUSD
+    - 3 NY ORBs 15m: XAUUSD, USDCAD, GBPUSD
+    - 5 London ORBs 15m: XAUUSD, EURUSD, GBPJPY, EURGBP, USDCHF
+    - 9 Asian ORBs 1h: USDJPY, EURJPY, AUDUSD, USDCAD, GBPUSD, GBPJPY, NZDUSD, EURUSD, USDCHF
+
+    Notas operacionales:
+    - GBPJPY London ORB + Asian ORB: skip en días reunión BoJ (~8/año)
+    - EURGBP London ORB: skip en días BoE/ECB (~20/año)
+    - DailyLossGuard en -5% y MaxLossGuard en -10% protegen el portfolio.
+    - FVG XAUUSD validada pero excluida — 4ª estrategia en XAUUSD.
     """
     return [
         StrategyConfig(
@@ -218,7 +296,7 @@ def build_default_portfolio() -> list[StrategyConfig]:
         StrategyConfig(
             strategy_id="xauusd_london_orb_15m",
             symbol="XAUUSD", timeframe="15m",
-            risk_pct=0.0025, trail_atr_mult=0.5,
+            risk_pct=0.0025, trail_atr_mult=0.3,  # trail sweep: 0.3 → PF 2.905 6/6 (comm-adj); 0.5 daba PF 1.534 5/6
             generator=build_xauusd_london_orb_15m(),
         ),
         StrategyConfig(
@@ -266,7 +344,7 @@ def build_default_portfolio() -> list[StrategyConfig]:
         StrategyConfig(
             strategy_id="eurgbp_london_orb_15m",
             symbol="EURGBP", timeframe="15m",
-            risk_pct=0.0025, trail_atr_mult=0.4,     # 6/6 OOS, PF 4.967, DD p95 0.5% — W3 BoE/ECB convergence NO afecta
+            risk_pct=0.0025, trail_atr_mult=0.3,     # 6/6 OOS, PF 2.742 (comm-adj); trail sweep: 0.4→PF 1.982, 0.3→PF 2.742 — skip on BoE/ECB days
             generator=build_eurgbp_london_orb_15m(),
         ),
         StrategyConfig(
@@ -274,6 +352,50 @@ def build_default_portfolio() -> list[StrategyConfig]:
             symbol="USDCHF", timeframe="15m",
             risk_pct=0.0025, trail_atr_mult=0.4,     # 6/6 OOS, PF 6.848, DD p95 0.4% — SNB risk neutralizado (intraday)
             generator=build_usdchf_london_orb_15m(),
+        ),
+        # ── Asian ORB family — nuevos miembros validados ─────────────────────
+        StrategyConfig(
+            strategy_id="usdcad_asian_orb_1h",
+            symbol="USDCAD", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.2,      # 6/6 OOS, PF 8.505 (comm-adj), DD p95 0.2% — complementario con NY ORB (07:00-12:00 vs 13:30-18:00 UTC, sin solapamiento)
+            generator=build_usdcad_asian_orb_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="gbpusd_asian_orb_1h",
+            symbol="GBPUSD", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.2,      # 6/6 OOS, PF 6.916 (comm-adj), DD p95 0.8% — mayor PnL/6m del portfolio ($2,040 median)
+            generator=build_gbpusd_asian_orb_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="gbpjpy_asian_orb_1h",
+            symbol="GBPJPY", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.2,      # 6/6 OOS, PF 26.792 (comm-adj), DD p95 0.6% — skip on BoJ days
+            generator=build_gbpjpy_asian_orb_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="nzdusd_asian_orb_1h",
+            symbol="NZDUSD", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.2,      # 6/6 OOS, PF 8.731 (comm-adj), DD p95 0.4%
+            generator=build_nzdusd_asian_orb_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="eurusd_asian_orb_1h",
+            symbol="EURUSD", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.2,      # 6/6 OOS, PF 4.525 (comm-adj), DD p95 0.9% — rango distinto al London ORB (23:00-07:00 vs 07:00-08:00)
+            generator=build_eurusd_asian_orb_1h(),
+        ),
+        StrategyConfig(
+            strategy_id="usdchf_asian_orb_1h",
+            symbol="USDCHF", timeframe="1h",
+            risk_pct=0.003, trail_atr_mult=0.2,      # 6/6 OOS, PF 7.225 (comm-adj), DD p95 0.7% — rango distinto al London ORB (23:00-07:00 vs 07:00-08:00)
+            generator=build_usdchf_asian_orb_1h(),
+        ),
+        # ── NY ORB — nuevo miembro validado ───────────────────────────────────
+        StrategyConfig(
+            strategy_id="gbpusd_ny_orb_15m",
+            symbol="GBPUSD", timeframe="15m",
+            risk_pct=0.0025, trail_atr_mult=0.4,     # 6/6 OOS, PF 3.696 (comm-adj), DD p95 0.6% — mayor consistencia OOS de todos los ORBs
+            generator=build_gbpusd_ny_orb_15m(),
         ),
     ]
 

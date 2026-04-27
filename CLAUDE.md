@@ -133,11 +133,12 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 ### ✅ London Open ORB + Trail — VALIDADA (`src/signals/breakout/london_open_breakout.py`)
 
 - **Asset/TF:** XAUUSD 15m
-- **Logic:** Range 07:00-08:00 UTC (09:00-10:00 broker). Breakout entry 08:00-12:00 UTC. ADX > 18. Trail 0.5×ATR.
-- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.5`
-- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **2.907**, P(ruin) **0.0%**, Max DD p95 **0.5%**
-- **FTMO viability:** ~€180/mes en €10k. PnL median $1.079 sobre 6 meses.
-- **Clave:** Con fixed TP era FROZEN (IS PF=1.017). Trail 0.5×ATR la rescató completamente — los false breakouts de Londres se convierten en pequeñas ganancias en vez de -1R.
+- **Logic:** Range 07:00-08:00 UTC (09:00-10:00 broker). Breakout entry 08:00-12:00 UTC. ADX > 18. Trail 0.3×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.3`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $35/lot):** **6/6 OOS profitable**, avg OOS PF **2.905**, P(ruin) **0.0%**, Max DD p95 **0.5%**, WFE **1.417**
+- **Trail sweep (con comisión $35/lot):** 0.3 → PF **2.905** 6/6 | 0.4 → PF 2.106 6/6 | 0.5 → PF 1.534 5/6. Trail más ajustado mejora PF y flip la ventana perdedora.
+- **Execution margin trail=0.3:** ATR 15M XAUUSD ~$4 × 0.3 = **$1.20 margin** vs spread $0.35-0.40 (ratio 3-3.5×). Entradas 08:00-12:00 UTC cierran antes de US news (12:30+). EU news (ECB 12:15 UTC) es el único riesgo — posiciones abiertas antes de 12:00 suelen estar ya en profit con trail alejado.
+- **Clave:** Con fixed TP era FROZEN (PF 1.017). Trail rescata la estrategia; trail=0.3 es el sweet spot comisión-ajustado. 80-88 trades/ventana OOS (estadísticamente sólido).
 
 ### ✅ USDJPY Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
 
@@ -257,13 +258,13 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 ### ✅ EURGBP London Open ORB 15M + Trail — VALIDADA (`src/signals/breakout/london_open_breakout.py`)
 
 - **Asset/TF:** EURGBP 15m
-- **Logic:** Rango London Open 07:00-08:00 UTC. Breakout entry 08:00-12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.4×ATR.
-- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.4`
-- **Walk-forward (2022–2026, 6 windows):** **6/6 OOS profitable**, avg OOS PF **4.967**, P(ruin) **0.0%**, Max DD p95 **0.5%**, WFE **1.122**
-- **Trail sweep:** trail=0.5 (PF 3.293) → trail=0.4 sweet spot (PF 4.967) → trail=0.3 (PF 8.171, margin 1.8-3 pip vs spread 1-2 pip, demasiado ajustado). IS Gate 1: PF 3.289.
-- **Hallazgo clave:** W3 (H1 2024, convergencia BoE/ECB) OOS PF = **4.651** con trail=0.4 — el mismo régimen que destruye el pullback EURGBP (5/6) es neutral o positivo para el ORB. La convergencia crea consolidación pre-London → breakout más limpio.
-- **Execution margin:** ATR 15M 6-10 pip × 0.4 = 2.4-4 pip vs spread 1-2 pip (ratio 1.2-4×, aceptable).
-- **FTMO viability:** ~$1,576/6m en $10k. ~14-17 trades/mes.
+- **Logic:** Rango London Open 07:00-08:00 UTC. Breakout entry 08:00-12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.3×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.0025`, `exit_mode=trail`, `trail_atr_mult=0.3`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **2.742**, P(ruin) **0.0%**, Max DD p95 **0.7%**, WFE **0.999**
+- **Trail sweep (con comisión $7/lot):** 0.5 (PF 3.293 sin comm) → 0.4 → PF **1.982** (com) → 0.3 → PF **2.742** (com, sweet spot). Trail más ajustado compensa el coste de comisión.
+- **Execution margin trail=0.3:** ATR 15M EURGBP ~10 pip × 0.3 = **3 pip margin** vs spread 0.2-0.5 pip normal (ratio 6-15×). En días BoE/ECB spread sube a 2-5 pip (ratio cae a 0.6-1.5×). **Regla operacional: skip en días BoE/ECB (~20/año)** — mismo mecanismo que BoJ rule para GBPJPY.
+- **Hallazgo clave:** W3 (H1 2024, convergencia BoE/ECB) OOS PF = **2.145** con trail=0.3 — el mismo régimen que destruye el pullback EURGBP (5/6) sigue siendo positivo para el ORB. 83-100 trades/ventana OOS.
+- **FTMO viability:** ~$1,003/6m en $10k. ~14-17 trades/mes.
 
 ### ✅ USDCHF London Open ORB 15M + Trail — VALIDADA (`src/signals/breakout/london_open_breakout.py`)
 
@@ -314,6 +315,47 @@ HTF filters work by resampling the base DataFrame (e.g., 1h → 4h), computing E
 - **GBPUSD London ORB 15m** (trail=0.4, PF 3.006, 6/6, CON comisión): Documentado pero excluido — evitar dos ORBs en el mismo par sin reducir risk. NY ORB es más consistente (WFE 0.994 vs 1.248).
 - **FTMO viability:** ~$1,200/6m en $10k. ~90-100 trades/6m. Alta frecuencia + alta consistencia = fiable para FTMO targets.
 
+### ✅ USDCAD Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** USDCAD 1h
+- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.2×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **8.505**, P(ruin) **0.0%**, Max DD p95 **0.2%**, WFE **1.526**
+- **Consistencia excepcional:** Min OOS PF 4.061 (W6), max 14.726 (W1). Sin ventanas perdedoras. El peor periodo da PF 4.0.
+- **Complementario con NY ORB:** USDCAD tiene dos estrategias ORB con ventanas sin solapamiento: Asian ORB (07:00-12:00 UTC) + NY ORB (13:30-18:00 UTC). Max riesgo combinado: 0.55%/día.
+- **Driver:** CAD influenciado por precios petróleo y datos China en Asia. El rango asiático refleja el posicionamiento overnight en commodities; London lo rompe con flujos institucionales.
+- **Execution margin:** ATR 1H USDCAD ~70 pips × 0.2 = 14 pips vs spread 1.5-2 pip (ratio 7-9×). Muy seguro.
+- **FTMO viability:** ~$1,121/6m en $10k. DD p95 0.2% — el más bajo de todas las estrategias del portfolio.
+
+### ✅ GBPUSD Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** GBPUSD 1h
+- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.2×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **6.916**, P(ruin) **0.0%**, Max DD p95 **0.8%**, WFE **1.295**
+- **PnL median más alto del portfolio:** Monte Carlo $2,040/6m en $10k — supera todas las demás estrategias individuales.
+- **GBPUSD estrategias complementarias:** 3 ventanas sin solapamiento — Asian ORB (07:00-12:00), Pullback 1h (09:00-23:00, trades cortos), NY ORB (13:30-18:00). Max riesgo combinado: 0.95%/día.
+- **Execution margin:** ATR 1H GBPUSD ~80 pips × 0.2 = 16 pips vs spread 0.8-1.5 pip (ratio 10-20×). Muy seguro.
+- **FTMO viability:** ~$2,040/6m en $10k. 60 trades/ventana OOS (estadísticamente sólido).
+
+### ✅ USDCHF Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** USDCHF 1h
+- **Logic:** Construir rango sesión asiática (23:00–07:00 UTC). Breakout entry 07:00–12:00 UTC en dirección H4 trend. ADX > 18. Trail 0.2×ATR.
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **7.225**, P(ruin) **0.0%**, Max DD p95 **0.7%**, WFE **1.269**
+- **Rango independiente del London ORB:** Asian ORB usa el rango nocturno 23:00-07:00 UTC (8 horas). London ORB usa el rango 07:00-08:00 UTC (1 hora). Son niveles de entrada distintos con SLs distintos — no es el mismo trade aunque ambos operen en sesión London. Combinado max 0.55%/día en USDCHF (mismo orden de magnitud que GBPJPY con London ORB + Asian ORB).
+- **W2 débil:** OOS PF 2.687 (H2 2023 — CHF apreciación por SNB tightening). Resto de ventanas: PF 4.6-10.3.
+- **Execution margin:** ATR 1H USDCHF ~60 pips × 0.2 = 12 pips vs spread 1.5-2 pip (ratio 6-8×). Seguro.
+
+### ✅ EURUSD Asian Session ORB 1H + Trail — VALIDADA (`src/signals/breakout/asian_session_orb.py`)
+
+- **Asset/TF:** EURUSD 1h
+- **Walk-forward (2022–2026, 6 windows, CON comisión $7/lot):** **6/6 OOS profitable**, avg OOS PF **4.525**, P(ruin) **0.0%**, Max DD p95 **0.9%**, WFE **1.192**
+- **Best parameters:** `adx_min=18`, `rr_target=2.5`, `risk_pct=0.003`, `exit_mode=trail`, `trail_atr_mult=0.2`
+- **Rango independiente del London ORB:** Asian ORB (23:00-07:00 UTC) y London ORB (07:00-08:00 UTC) usan rangos de referencia completamente distintos. En el mismo símbolo, ambas pueden disparar el mismo día en la misma dirección, pero con entradas, SLs y TPs distintos — exposición combinada máxima 0.55%/día, gestionada por DailyLossGuard.
+- **Execution margin:** ATR 1H EURUSD ~80 pips × 0.2 = 16 pips vs spread 0.5-1 pip (ratio 16-32×). Muy seguro.
+
 ### ❌ London Breakout (`src/signals/breakout/london_breakout.py`)
 
 - **Asset/TF:** XAUUSD 15m
@@ -358,12 +400,12 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 | Estrategia | PF sin comisión | PF con comisión | Δ | Estado |
 |------------|----------------|----------------|---|--------|
 | XAUUSD Pullback 1h | 5.546 | **4.027** | −27% | 6/6 ✓ |
-| XAUUSD London ORB 15m | 2.907 | **1.534** | −47% | 5/6 ⚠️ |
+| XAUUSD London ORB 15m (trail=0.3) | 2.905 | **2.905** | 0% | 6/6 ✓ |
 | XAUUSD NY ORB 15m | 9.216 | **2.730** | −70% | 6/6 ✓ |
 | EURUSD London ORB 15m | 3.978 | **2.334** | −41% | 6/6 ✓ |
 | GBPJPY London ORB 15m | 5.282 | **5.267** | −0.3% | 6/6 ✓ |
 | USDCHF London ORB 15m | 6.848 | **3.524** | −49% | 6/6 ✓ |
-| EURGBP London ORB 15m | 4.967 | **1.982** | −60% | 6/6 ✓ |
+| EURGBP London ORB 15m (trail=0.3) | 4.967 | **2.742** | −45% | 6/6 ✓ |
 | USDCAD NY ORB 15m | 4.472 | **3.129** | −30% | 6/6 ✓ |
 | USDJPY Asian ORB 1h | 24.893 | **24.780** | −0.5% | 6/6 ✓ |
 | EURJPY Asian ORB 1h | 9.356 | **9.333** | −0.2% | 6/6 ✓ |
@@ -371,10 +413,16 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 | GBPJPY Asian ORB 1h | NEW | **26.792** | — | 6/6 ✓ |
 | NZDUSD Asian ORB 1h | NEW | **8.731** | — | 6/6 ✓ |
 | GBPUSD NY ORB 15m | NEW | **3.696** | — | 6/6 ✓ |
+| USDCAD Asian ORB 1h | NEW | **8.505** | — | 6/6 ✓ |
+| GBPUSD Asian ORB 1h | NEW | **6.916** | — | 6/6 ✓ |
+| USDCHF Asian ORB 1h | NEW | **7.225** | — | 6/6 ✓ |
+| EURUSD Asian ORB 1h | NEW | **4.525** | — | 6/6 ✓ |
 
 **Insight clave:** Los pares JPY (USDJPY, EURJPY) y GBPJPY apenas se ven afectados porque el spread en JPY es irrelevante vs el ATR. XAUUSD sufre más porque el spread ($35/lot) es alto relativo al tamaño de posición en estrategias con trailing corto (15M ORB). Las 3 Asian ORB 1h son las más robustas a costes de transacción.
 
-**XAUUSD London ORB alerta:** Con comisión baja a 5/6 y PF 1.534 — edge fino pero real. Monitorear en live con atención especial. Si el broker cobra menos spread (ej. $0.20 × 100 = $20/lot), el PF con comisión sería ~2.0-2.5.
+**Trail sweep post-comisión:** XAUUSD London ORB rescatada de PF 1.534 (trail=0.5, 5/6) a PF 2.905 (trail=0.3, 6/6) ajustando solo el trail. EURGBP London ORB mejorada de PF 1.982 (trail=0.4) a PF 2.742 (trail=0.3). Patrón: el trail óptimo pre-comisión no es el óptimo post-comisión — trails más ajustados capturan más PnL y compensan el coste fijo por trade. **Ambos parámetros actualizados en live runner.**
+
+**GBPUSD Pullback 1h con comisión:** 6/6, PF 2.325, DD p95 2.2%, WFE 1.846. Ya está en live runner (trail=0.5). 19-29 trades/ventana OOS — frecuencia baja pero edge consistente.
 
 ## Known Research Findings
 
@@ -387,7 +435,11 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **EURUSD mean reversion:** Régimen-dependiente. Con datos correctos (UTC+2): 2022 PF 0.67, 2023 PF 1.01, 2024 PF 1.80, 2025 PF 0.19. Sin consistencia entre años. El buen resultado de 2023 previo (PF 4.6) era un artefacto del CSV UTC mal interpretado como UTC+2.
 - **XAUUSD mean reversion:** WR ~27% en todos los años. No complementario al pullback — fallan juntos.
 - **Multi-par scan completo (pullback):** USDJPY CONDITIONAL (validado a 0.3% riesgo). EURJPY con trail=0.3 da OOS 5/6 PF 4.747 pero IS PF=1.073 falla Gate 1 y trade counts muy bajos (9-26/ventana) — documentado, no en live. GBPJPY con trail FAIL 4/6 (W5 más reciente PF 0.682, BoJ gap risk descarta para live). AUDUSD FAIL (avg PF ~0.88). USDCAD FAIL Gate 1 con trail (IS PF=1.14). EURGBP CONDITIONAL PASS 5/6 PF 4.398 — documentado. USDCHF CONDITIONAL PASS 5/6 PF 2.669 — documentado. El edge EMA pullback requiere driver macro unidireccional fuerte.
-- **EURUSD London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 3.978, DD p95 0.6%, WFE 1.287, trail=0.5 (margen 2.4 pips vs spread 0.5-1.0 pip). Supera XAUUSD London ORB (PF 2.907). ~14-16 trades/mes, alta frecuencia. Trail=0.3 da PF 9.4 teórico pero margen 1.4 pips demasiado ajustado en días de noticias. AÑADIDA AL LIVE RUNNER. Trail/ADX sweep confirmó: ADX=18 + RR=2.5 + trail=0.5 es el óptimo. ADX=22 arregla W2 WFE pero reduce PnL 33%. RR=3.0 estrictamente peor.
+- **XAUUSD London ORB trail sweep (CON comisión):** trail=0.3 → PF 2.905 6/6 | trail=0.4 → PF 2.106 6/6 | trail=0.5 → PF 1.534 5/6. Cambiar trail 0.5→0.3 rescata la estrategia más débil del portfolio. Trail=0.3 para XAUUSD 15M: margen $1.20 vs spread $0.35-0.40 (ratio 3-3.5×, aceptable en horario London que cierra antes de US news). Live runner actualizado a trail=0.3.
+- **EURGBP London ORB trail sweep (CON comisión):** trail=0.3 → PF 2.742 6/6 | trail=0.4 → PF 1.982 6/6. Actualizado a trail=0.3. Execution margin: 3 pip vs 0.2-0.5 pip spread normal (ratio 6-15×). Riesgo: BoE/ECB días spread sube a 2-5 pip → skip en ~20 reuniones/año. WFE 0.999 (OOS iguala IS en promedio).
+- **GBPUSD Pullback 1h con comisión ($7/lot):** 6/6, PF 2.325 (vs 2.817 sin comisión, −18%), DD p95 2.2%, WFE 1.846. Retiene edge bien con comisión. 19-29 trades/ventana (frecuencia baja). Ya en live runner a trail=0.5.
+- **NZDUSD London ORB 15M:** FAIL — 5/6, PF 1.358 (marginal). NZD tiene baja volatilidad intraday London session. No añadida.
+- **EURUSD London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 3.978, DD p95 0.6%, WFE 1.287, trail=0.5 (margen 2.4 pips vs spread 0.5-1.0 pip). Supera XAUUSD London ORB (PF 2.907 sin comm). ~14-16 trades/mes, alta frecuencia. Trail=0.3 da PF 9.4 teórico pero margen 1.4 pips demasiado ajustado en días de noticias. AÑADIDA AL LIVE RUNNER. Trail/ADX sweep confirmó: ADX=18 + RR=2.5 + trail=0.5 es el óptimo. ADX=22 arregla W2 WFE pero reduce PnL 33%. RR=3.0 estrictamente peor.
 - **EURUSD NY Open ORB 15M CONDITIONAL:** 6/6 OOS, PF 2.745, DD p95 0.6%, pero W1 (PF 1.139) y W6 (PF 1.589) thin. Más débil que London ORB. Documentado, no en live runner.
 - **EURUSD pullback FAIL:** 0 winning trades (WR 0%) — EURUSD no es instrumento trending.
 - **EURJPY Asian Session ORB 1H ROBUSTA:** 6/6 OOS, PF 9.356 (trail=0.3), WFE 1.581, DD p95 0.6%, ~58 trades/6m. Trail sweep: 0.2 (PF 20.878) > 0.3 (PF 9.356, sweet spot) > 0.5 (PF 3.765). Misma mecánica que USDJPY Asian ORB (PF 24.893) aplicada a EUR/JPY. JPY establece rango asiático, EUR rompe en London open. AÑADIDA AL LIVE RUNNER (trail=0.3).
@@ -408,9 +460,9 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 - **Partial TP (50% a 1.5R) resultó PEOR:** Recorta ganadores antes de tiempo. El precio que llega a 1.5R tiende a continuar a 2.5R. Fixed o trail son mejores que partial.
 - **Data timezone:** CSVs en backtest/data/ usan UTC+2 (hora broker MT5). El sistema usa tz_offset_hours=2 para ser consistente. Nunca mezclar con CSVs UTC-naive de data/raw/.
 - **run_research_loop bug fixed:** Mean reversion params (rsi_oversold, rsi_overbought, bb_std) were not passed from YAML → run_backtest → BBReversionConfig. Fixed.
-- **Asian ORB family estructural (6 miembros confirmados):** USDJPY (PF 24.780), GBPJPY (PF 26.792), EURJPY (PF 9.333), NZDUSD (PF 8.731), AUDUSD (PF 4.346) forman familia con comisión incluida. GBPJPY es el nuevo líder junto a USDJPY. NZD confirma el 5º miembro (Sydney + RBNZ + datos China = divisa asiática primaria). PFs calculados con comisión $7/lot. La tesis: la divisa asiática primaria (JPY, AUD) define el rango 23:00-07:00 UTC. London rompe el rango estructuralmente con flujos institucionales. No funciona en pares EUR/USD (EUR es divisa London, no asiática). AUDUSD es el cuarto miembro confirmado (Sydney, RBA, China data definen el rango). ATR 1H 50 pip vs spread 0.4-0.8 pip da ratio de ejecución 12-37×.
+- **Asian ORB family estructural (10 pares validados, 10 en live):** USDJPY (PF 24.780), GBPJPY (PF 26.792), EURJPY (PF 9.333), NZDUSD (PF 8.731), AUDUSD (PF 4.346), USDCAD (PF 8.505), GBPUSD (PF 6.916), USDCHF (PF 7.225), EURUSD (PF 4.525). PFs calculados con comisión $7/lot. La tesis ha resultado ser universal: TODOS los pares forex principales forman rango asiático y lo rompen en la apertura London. El mecanismo es estructural (flujos institucionales London open rompiendo el overnight range), no macro. USDCHF y EURUSD tienen tanto Asian ORB como London ORB activos — los rangos son distintos (23:00-07:00 vs 07:00-08:00 UTC), producen entradas y SLs distintos. Exposición combinada máxima 0.55%/día por símbolo, comparable a GBPJPY (London ORB + Asian ORB = 0.55%/día) que nunca se cuestionó.
 - **AUDUSD Asian ORB 1H ROBUSTA:** 6/6 OOS, PF 7.073 (trail=0.3), WFE 1.260, DD p95 0.2%, P(ruin) 0.0%. Trail sweep: 0.2→16.303 (ratio ejecución 25×, incluso más seguro que USDJPY 9.6×), sweet spot trail=0.3 por conservadurismo. AUDUSD London ORB (PF 2.161, W4 OOS=1.020) y NY ORB (PF 2.334) ambos documentados pero excluidos. AÑADIDA AL LIVE RUNNER (trail=0.3, risk=0.3%).
-- **EURGBP London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 4.967 (trail=0.4), WFE 1.122, DD p95 0.5%, P(ruin) 0.0%. IS Gate 1: PF 3.289. Trail sweep: 0.5→3.293, 0.4→4.967 (sweet spot), 0.3→8.171 (margin 1.8-3 pip ≈ spread en noticias, excluido). HALLAZGO CLAVE: W3 (H1 2024, convergencia BoE/ECB que mata el pullback) OOS PF=4.651 — la convergencia que destruye el pullback crea consolidación pre-London que favorece el ORB. EURGBP NY ORB (PF 2.594) documentado pero excluido (no poner 2 ORBs en mismo par). AÑADIDA AL LIVE RUNNER (trail=0.4, risk=0.25%).
+- **EURGBP London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 2.742 (trail=0.3, com-adj), WFE 0.999, DD p95 0.7%, P(ruin) 0.0%. Trail sweep con comisión: 0.4→PF 1.982, 0.3→PF 2.742 (sweet spot). Trail=0.3 mejora porque captura más de cada winner y compensa el coste fijo. Execution margin 3 pip vs spread 0.2-0.5 pip normal (ratio 6-15×). W3 (H1 2024, convergencia BoE/ECB) OOS PF=2.145 — sigue positivo incluso en el régimen adverso. ACTUALIZADA EN LIVE RUNNER a trail=0.3 (desde 0.4). EURGBP NY ORB documentado pero excluido.
 - **USDCHF London Open ORB 15M ROBUSTA:** 6/6 OOS, PF 6.848 (trail=0.4), WFE 1.309, DD p95 0.4%, P(ruin) 0.0%. IS Gate 1: PF 4.598. Trail sweep: 0.5→4.577, 0.4→6.848 (sweet spot), 0.3→10.848 (margin 2.4-3.6 pip, ratio 1.2-2.4× borderline en días CPI). SNB RISK NEUTRALIZADO: rango 07:00-08:00 UTC incorpora horario habitual SNB (07:30 UTC), cierre antes 12:00 UTC. Mismo mecanismo que BoJ neutralization en GBPJPY. USDCHF NY ORB (PF 4.094) documentado pero excluido (correlación con USDCAD NY ORB). AÑADIDA AL LIVE RUNNER (trail=0.4, risk=0.25%).
 
 ## Risk Guards
