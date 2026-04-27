@@ -37,6 +37,12 @@ python -m src.orchestration.run_validation --symbol XAUUSD --strategy pullback -
   --start 2022-01-01 --end 2026-04-01 --risk 0.004 --adx-min 25 --rr-target 2.5 \
   --exit-mode trail --trail-atr-mult 0.5
 
+# Walk-forward CON comisiones (--commission en USD/lot round-trip)
+# Forex: 7.0 $/lot | XAUUSD: 35.0 $/lot (spread ~$0.35 × 100 oz)
+python -m src.orchestration.run_validation --symbol XAUUSD --strategy pullback --timeframe 1h \
+  --start 2022-01-01 --end 2026-04-01 --risk 0.004 --adx-min 25 --rr-target 2.5 \
+  --exit-mode trail --trail-atr-mult 0.3 --commission 35.0
+
 # Combined backtest (Breakout 15m + Pullback 1h, shared risk guards)
 python -m src.orchestration.run_combined --symbol XAUUSD --start 2023-01-01 --end 2025-01-01 \
   --risk 0.005 --adx-min 25 --rr-target 2.5 --research
@@ -301,6 +307,34 @@ Walk-forward in `run_validation.py` uses anchored windows: `IS=12m, OOS=6m, step
 3. Otherwise → "INESTABLE"
 
 **Monte Carlo** in `monte_carlo_pnl()` resamples OOS trade PnLs with replacement (5000 sims). DD values are absolute (positive = worse). `p50/p90/p95` of max DD are worst-case percentiles (increasing left to right).
+
+## Commission Modeling
+
+`run_backtest` y `run_validation` tienen el parámetro `--commission` (USD/lot round-trip). No afecta al live runner (que opera con spread y comisiones reales del broker).
+
+**Valores estándar** para broker IC Markets / FTMO partner:
+- Forex majors: `--commission 7.0` ($3.5 entrada + $3.5 salida)
+- XAUUSD: `--commission 35.0` (spread típico $0.35 × 100 oz/lot; sin comisión separada)
+
+**Resultados con comisión (walk-forward 2022-2026, 6 ventanas):**
+
+| Estrategia | PF sin comisión | PF con comisión | Δ | Estado |
+|------------|----------------|----------------|---|--------|
+| XAUUSD Pullback 1h | 5.546 | **4.027** | −27% | 6/6 ✓ |
+| XAUUSD London ORB 15m | 2.907 | **1.534** | −47% | 5/6 ⚠️ |
+| XAUUSD NY ORB 15m | 9.216 | **2.730** | −70% | 6/6 ✓ |
+| EURUSD London ORB 15m | 3.978 | **2.334** | −41% | 6/6 ✓ |
+| GBPJPY London ORB 15m | 5.282 | **5.267** | −0.3% | 6/6 ✓ |
+| USDCHF London ORB 15m | 6.848 | **3.524** | −49% | 6/6 ✓ |
+| EURGBP London ORB 15m | 4.967 | **1.982** | −60% | 6/6 ✓ |
+| USDCAD NY ORB 15m | 4.472 | **3.129** | −30% | 6/6 ✓ |
+| USDJPY Asian ORB 1h | 24.893 | **24.780** | −0.5% | 6/6 ✓ |
+| EURJPY Asian ORB 1h | 9.356 | **9.333** | −0.2% | 6/6 ✓ |
+| AUDUSD Asian ORB 1h | 7.073 | **4.346** | −39% | 6/6 ✓ |
+
+**Insight clave:** Los pares JPY (USDJPY, EURJPY) y GBPJPY apenas se ven afectados porque el spread en JPY es irrelevante vs el ATR. XAUUSD sufre más porque el spread ($35/lot) es alto relativo al tamaño de posición en estrategias con trailing corto (15M ORB). Las 3 Asian ORB 1h son las más robustas a costes de transacción.
+
+**XAUUSD London ORB alerta:** Con comisión baja a 5/6 y PF 1.534 — edge fino pero real. Monitorear en live con atención especial. Si el broker cobra menos spread (ej. $0.20 × 100 = $20/lot), el PF con comisión sería ~2.0-2.5.
 
 ## Known Research Findings
 
