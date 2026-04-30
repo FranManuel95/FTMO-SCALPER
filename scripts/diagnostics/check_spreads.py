@@ -9,7 +9,11 @@ de 0/33 trades alcanzando MFE > 1.5R en los últimos 4 días.
 
 from __future__ import annotations
 
+import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from src.live.mt5_client import MT5Client
 
