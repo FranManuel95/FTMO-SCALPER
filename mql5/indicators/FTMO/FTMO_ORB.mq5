@@ -115,6 +115,7 @@ int OnInit() {
 
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
+   Comment("");
    for(int i=0; i<ArraySize(g_status_objs); i++)
       ObjectDelete(0, g_status_objs[i]);
    ObjectDelete(0, g_lastSL);
@@ -138,6 +139,10 @@ void CreateStatusPanel() {
    }
    ObjectSetString(0, g_status_objs[0], OBJPROP_TEXT, "FTMO ORB");
    ObjectSetInteger(0, g_status_objs[0], OBJPROP_FONTSIZE, 10);
+   ObjectSetString(0, g_status_objs[1], OBJPROP_TEXT, "Range: …");
+   ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, "ATR: …");
+   ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, "ADX: …");
+   ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, "H4: …");
 }
 
 //+------------------------------------------------------------------+
@@ -164,16 +169,41 @@ int OnCalculate(const int rates_total,
                 const int &spread[]) {
 
    int needed = MathMax(AtrPeriod*3, AdxPeriod*3) + 5;
-   if(rates_total < needed) return 0;
+   if(rates_total < needed) {
+      Comment(StringFormat("FTMO_ORB: warmup (rates=%d, needed=%d)", rates_total, needed));
+      return 0;
+   }
 
    double atr[], adx[], h4f[], h4s[];
-   if(CopyBuffer(hAtr,0,0,rates_total,atr) <= 0) return prev_calculated;
-   if(CopyBuffer(hAdx,0,0,rates_total,adx) <= 0) return prev_calculated;
+   ArraySetAsSeries(atr, false);
+   ArraySetAsSeries(adx, false);
+   ArraySetAsSeries(h4f, false);
+   ArraySetAsSeries(h4s, false);
+
+   int got_atr = CopyBuffer(hAtr,0,0,rates_total,atr);
+   int got_adx = CopyBuffer(hAdx,0,0,rates_total,adx);
+   if(got_atr <= 0 || got_adx <= 0) {
+      Comment(StringFormat("FTMO_ORB: data not ready atr=%d adx=%d", got_atr, got_adx));
+      return prev_calculated;
+   }
 
    bool use_h4 = UseH4Filter;
+   int got_h4f = 0, got_h4s = 0;
    if(use_h4) {
-      if(CopyBuffer(hEma50_H4, 0,0,rates_total,h4f) <= 0) use_h4 = false;
-      if(CopyBuffer(hEma200_H4,0,0,rates_total,h4s) <= 0) use_h4 = false;
+      got_h4f = CopyBuffer(hEma50_H4, 0,0,rates_total,h4f);
+      got_h4s = CopyBuffer(hEma200_H4,0,0,rates_total,h4s);
+      if(got_h4f <= 0 || got_h4s <= 0) use_h4 = false;
+   }
+
+   // Cap the iteration to the smallest available indicator buffer (CopyBuffer may
+   // return fewer elements than rates_total when BarsCalculated() < rates_total).
+   int min_size = MathMin(got_atr, got_adx);
+   if(use_h4) min_size = MathMin(min_size, MathMin(got_h4f, got_h4s));
+   int loop_end = MathMin(rates_total, min_size);
+   if(loop_end <= needed) {
+      Comment(StringFormat("FTMO_ORB: insufficient calculated bars (have %d, need %d)",
+                           min_size, needed));
+      return prev_calculated;
    }
 
    int rs = (RangeStartUTC + BrokerOffsetH) % 24;
@@ -182,7 +212,7 @@ int OnCalculate(const int rates_total,
    int ee = (EntryEndUTC   + BrokerOffsetH) % 24;
 
    // Limpiar buffers
-   for(int i = needed; i < rates_total; i++) {
+   for(int i = needed; i < loop_end; i++) {
       LongBuf[i]  = EMPTY_VALUE;
       ShortBuf[i] = EMPTY_VALUE;
    }
@@ -190,7 +220,7 @@ int OnCalculate(const int rates_total,
    // Determinar bar inicial — solo procesamos los últimos MaxDaysBack días
    datetime cutoff = TimeCurrent() - (datetime)(MaxDaysBack * 86400);
    int start_idx = needed;
-   for(int k = needed; k < rates_total; k++) {
+   for(int k = needed; k < loop_end; k++) {
       if(time[k] >= cutoff) { start_idx = k; break; }
    }
 
@@ -205,7 +235,7 @@ int OnCalculate(const int rates_total,
    cur.built = false; cur.signalled = false;
    cur.range_start_t = 0; cur.range_end_t = 0;
 
-   for(int i = start_idx; i < rates_total; i++) {
+   for(int i = start_idx; i < loop_end; i++) {
       MqlDateTime dt;
       TimeToStruct(time[i], dt);
       datetime day_start = (datetime)((long)time[i] / 86400 * 86400);
@@ -276,12 +306,47 @@ int OnCalculate(const int rates_total,
       }
       cur.signalled = true;
 
-      if(ShowSlTp && i == rates_total - 1) DrawSlTp(time[i], sl, tp);
+      if(ShowSlTp && i == loop_end - 1) DrawSlTp(time[i], sl, tp);
 
       if(ShowEntryBox) DrawEntryBox(cur, time[i], es, ee);
    }
 
-   UpdateStatusPanel(rates_total - 1, atr, adx, h4f, h4s, use_h4, cur);
+   // ─── Status panel (inlined) ───
+   int last = loop_end - 1;
+   if(last >= 0) {
+      double a = atr[last], dx = adx[last];
+
+      string rg;
+      if(cur.high > 0 && cur.low > 0 && cur.built) {
+         double rs_size = cur.high - cur.low;
+         double ratio   = (a > 0) ? rs_size / a : 0;
+         string ok = (ratio >= RangeMinAtr && ratio <= RangeMaxAtr) ? "OK" : "X";
+         rg = StringFormat("Range: %.5f (%.2fxATR) %s", rs_size, ratio, ok);
+      } else if(cur.high > 0) {
+         rg = StringFormat("Range building: H=%.5f L=%.5f", cur.high, cur.low);
+      } else {
+         rg = "Range: pending";
+      }
+
+      string adxtxt = StringFormat("ADX: %.1f (min %.0f) %s",
+                                   dx, AdxMin, (dx >= AdxMin ? "OK" : "X"));
+      string atrtxt = StringFormat("ATR: %.5f", a);
+
+      string h4txt = "H4: off";
+      if(use_h4) {
+         double h4f_v = h4f[last], h4s_v = h4s[last];
+         if(h4f_v > h4s_v)      h4txt = "H4: BULL";
+         else if(h4f_v < h4s_v) h4txt = "H4: BEAR";
+      }
+
+      ObjectSetString(0, g_status_objs[1], OBJPROP_TEXT, rg);
+      ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, atrtxt);
+      ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, adxtxt);
+      ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, h4txt);
+      Comment(StringFormat("FTMO_ORB: OK | last bar @ %s", TimeToString(time[last])));
+      ChartRedraw(0);
+   }
+
    return rates_total;
 }
 
@@ -339,38 +404,4 @@ void DrawSlTp(datetime t, double sl, double tp) {
    ObjectSetInteger(0,g_lastTP,OBJPROP_WIDTH,1);
 }
 
-//+------------------------------------------------------------------+
-void UpdateStatusPanel(int i, const double &atr[], const double &adx[],
-                       const double &h4f[], const double &h4s[], bool use_h4,
-                       const DayRange &cur) {
-   if(i < 0) return;
-   double a = atr[i], dx = adx[i];
-
-   string rg;
-   if(cur.high > 0 && cur.low > 0 && cur.built) {
-      double rs_size = cur.high - cur.low;
-      double ratio   = (a > 0) ? rs_size / a : 0;
-      string ok = (ratio >= RangeMinAtr && ratio <= RangeMaxAtr) ? "OK" : "X";
-      rg = StringFormat("Range: %.5f (%.2fxATR) %s", rs_size, ratio, ok);
-   } else if(cur.high > 0) {
-      rg = StringFormat("Range building: H=%.5f L=%.5f", cur.high, cur.low);
-   } else {
-      rg = "Range: pending";
-   }
-
-   string adxtxt = StringFormat("ADX: %.1f (min %.0f) %s",
-                                dx, AdxMin, (dx >= AdxMin ? "OK" : "X"));
-   string atrtxt = StringFormat("ATR: %.5f", a);
-
-   string h4txt = "H4: off";
-   if(use_h4) {
-      if(h4f[i] > h4s[i])      h4txt = "H4: BULL";
-      else if(h4f[i] < h4s[i]) h4txt = "H4: BEAR";
-   }
-
-   ObjectSetString(0, g_status_objs[1], OBJPROP_TEXT, rg);
-   ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, atrtxt);
-   ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, adxtxt);
-   ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, h4txt);
-}
 //+------------------------------------------------------------------+

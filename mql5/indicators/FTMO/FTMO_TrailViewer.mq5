@@ -114,7 +114,12 @@ int OnCalculate(const int rates_total,
    for(int i = 0; i < rates_total; i++) TrailBuf[i] = EMPTY_VALUE;
 
    double atr[];
-   if(CopyBuffer(hAtr, 0, 0, rates_total, atr) <= 0) return prev_calculated;
+   ArraySetAsSeries(atr, false);
+   int got_atr = CopyBuffer(hAtr, 0, 0, rates_total, atr);
+   if(got_atr <= 0) return prev_calculated;
+
+   // Cap iteration to actual available ATR bars (CopyBuffer may return < rates_total)
+   int loop_end = MathMin(rates_total, got_atr);
 
    // Buscar posición primera del bot en el símbolo activo
    ulong tk = FindBotTicket();
@@ -131,7 +136,7 @@ int OnCalculate(const int rates_total,
    double highest = 0, lowest = 0;
    bool first = true;
 
-   for(int i = 0; i < rates_total; i++) {
+   for(int i = 0; i < loop_end; i++) {
       if(time[i] < entry_time) continue;
 
       if(first) {
