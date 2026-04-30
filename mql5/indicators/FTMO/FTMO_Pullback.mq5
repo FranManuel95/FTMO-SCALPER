@@ -183,6 +183,33 @@ int OnCalculate(const int rates_total,
       return 0;
    }
 
+   // Solo procesamos los últimos N bars donde TODOS los indicadores están calculados.
+   // BarsCalculated() del handle más restrictivo (EMA200 H4) determina el rango válido.
+   int bc_e20 = BarsCalculated(hEma20);
+   int bc_e50 = BarsCalculated(hEma50);
+   int bc_adx = BarsCalculated(hAdx);
+   int bc_atr = BarsCalculated(hAtr);
+   int bc_rsi = BarsCalculated(hRsi);
+   int bc_min = MathMin(MathMin(MathMin(bc_e20, bc_e50), MathMin(bc_adx, bc_atr)), bc_rsi);
+
+   bool use_h4 = UseH4Filter;
+   if(use_h4) {
+      int bc_h4f = BarsCalculated(hEma50_H4);
+      int bc_h4s = BarsCalculated(hEma200_H4);
+      if(bc_h4f <= 0 || bc_h4s <= 0) use_h4 = false;
+      else bc_min = MathMin(bc_min, MathMin(bc_h4f, bc_h4s));
+   }
+
+   if(bc_min <= needed) {
+      Comment(StringFormat("FTMO_Pullback: data not ready (bars_calculated=%d, needed=%d)",
+                           bc_min, needed));
+      return prev_calculated;
+   }
+
+   // Limitamos a los últimos N bars (con un cap de 5000 para no procesar décadas)
+   int n_use = MathMin(MathMin(rates_total, bc_min), 5000);
+   int chart_start = rates_total - n_use;   // primer bar del chart que vamos a tocar
+
    double ema20[], ema50[], adx[], atr[], rsi[], h4f[], h4s[];
    ArraySetAsSeries(ema20, false);
    ArraySetAsSeries(ema50, false);
@@ -192,37 +219,20 @@ int OnCalculate(const int rates_total,
    ArraySetAsSeries(h4f,   false);
    ArraySetAsSeries(h4s,   false);
 
-   int got_e20 = CopyBuffer(hEma20,0,0,rates_total,ema20);
-   int got_e50 = CopyBuffer(hEma50,0,0,rates_total,ema50);
-   int got_adx = CopyBuffer(hAdx,  0,0,rates_total,adx);
-   int got_atr = CopyBuffer(hAtr,  0,0,rates_total,atr);
-   int got_rsi = CopyBuffer(hRsi,  0,0,rates_total,rsi);
-
-   if(got_e20 <= 0 || got_e50 <= 0 || got_adx <= 0 || got_atr <= 0 || got_rsi <= 0) {
-      Comment(StringFormat("FTMO_Pullback: data not ready ema20=%d ema50=%d adx=%d atr=%d rsi=%d",
-                           got_e20, got_e50, got_adx, got_atr, got_rsi));
+   if(CopyBuffer(hEma20,0,0,n_use,ema20) != n_use ||
+      CopyBuffer(hEma50,0,0,n_use,ema50) != n_use ||
+      CopyBuffer(hAdx,  0,0,n_use,adx)   != n_use ||
+      CopyBuffer(hAtr,  0,0,n_use,atr)   != n_use ||
+      CopyBuffer(hRsi,  0,0,n_use,rsi)   != n_use) {
+      Comment("FTMO_Pullback: CopyBuffer mismatch on primary indicators");
       return prev_calculated;
    }
 
-   bool use_h4 = UseH4Filter;
-   int got_h4f = 0, got_h4s = 0;
    if(use_h4) {
-      got_h4f = CopyBuffer(hEma50_H4, 0,0,rates_total,h4f);
-      got_h4s = CopyBuffer(hEma200_H4,0,0,rates_total,h4s);
-      if(got_h4f <= 0 || got_h4s <= 0) use_h4 = false;
-   }
-
-   // ── Cap the iteration to the smallest available indicator buffer ──
-   // CopyBuffer may return fewer elements than rates_total if BarsCalculated() < rates_total
-   // (typical on a low timeframe chart that asks for a higher-TF indicator like EMA200 H4).
-   // Without this cap, accessing ema20[rates_total-1] on a partial buffer is out-of-range.
-   int min_size = MathMin(MathMin(MathMin(got_e20, got_e50), MathMin(got_adx, got_atr)), got_rsi);
-   if(use_h4) min_size = MathMin(min_size, MathMin(got_h4f, got_h4s));
-   int loop_end = MathMin(rates_total, min_size);
-   if(loop_end <= needed) {
-      Comment(StringFormat("FTMO_Pullback: insufficient calculated bars (have %d, need %d)",
-                           min_size, needed));
-      return prev_calculated;
+      if(CopyBuffer(hEma50_H4, 0,0,n_use,h4f) != n_use ||
+         CopyBuffer(hEma200_H4,0,0,n_use,h4s) != n_use) {
+         use_h4 = false;
+      }
    }
 
    int s_start = (SessionStartUTC + BrokerOffsetH) % 24;
@@ -230,96 +240,97 @@ int OnCalculate(const int rates_total,
 
    datetime last_signal_day = 0;
 
-   // Inicializar buffers de EMA con EMPTY_VALUE para que MT5 no los pinte en y=0
+   // Limpiar TODOS los buffers a EMPTY_VALUE (incluyendo zonas que no procesaremos)
    for(int j = 0; j < rates_total; j++) {
-      if(j < needed) {
-         Ema20Buf[j] = EMPTY_VALUE;
-         Ema50Buf[j] = EMPTY_VALUE;
-      }
+      Ema20Buf[j] = EMPTY_VALUE;
+      Ema50Buf[j] = EMPTY_VALUE;
       LongBuf[j]  = EMPTY_VALUE;
       ShortBuf[j] = EMPTY_VALUE;
    }
 
-   for(int i = needed; i < loop_end; i++) {
-      Ema20Buf[i] = ema20[i];
-      Ema50Buf[i] = ema50[i];
+   // Iteramos sobre el rango de chart bars correspondiente a indicador disponible.
+   // Mapping: chart_idx = chart_start + ind_idx; ind_idx = chart_idx - chart_start
+   int chart_first = MathMax(needed + chart_start, chart_start + 2);
+   for(int ci = chart_first; ci < rates_total; ci++) {
+      int ii = ci - chart_start;
+      if(ii < 2 || ii >= n_use) continue;
 
-      if(i < 2) continue;
+      Ema20Buf[ci] = ema20[ii];
+      Ema50Buf[ci] = ema50[ii];
 
       // Sesión
       MqlDateTime dt;
-      TimeToStruct(time[i], dt);
+      TimeToStruct(time[ci], dt);
       bool in_session;
       if(s_start < s_end) in_session = (dt.hour >= s_start && dt.hour < s_end);
       else                in_session = (dt.hour >= s_start || dt.hour < s_end);
       if(!in_session) continue;
 
-      // Filtros
-      if(adx[i] < AdxMin) continue;
+      if(adx[ii] < AdxMin) continue;
 
-      bool bullish = close[i] > ema50[i] && ema20[i] > ema50[i];
-      bool bearish = close[i] < ema50[i] && ema20[i] < ema50[i];
+      bool bullish = close[ci] > ema50[ii] && ema20[ii] > ema50[ii];
+      bool bearish = close[ci] < ema50[ii] && ema20[ii] < ema50[ii];
       if(!bullish && !bearish) continue;
 
       if(use_h4) {
-         if(bullish && h4f[i] < h4s[i]) continue;
-         if(bearish && h4f[i] > h4s[i]) continue;
+         if(bullish && h4f[ii] < h4s[ii]) continue;
+         if(bearish && h4f[ii] > h4s[ii]) continue;
       }
 
-      // Una señal por día
-      datetime day_start = (datetime)((long)time[i] / 86400 * 86400);
+      datetime day_start = (datetime)((long)time[ci] / 86400 * 86400);
       if(ShowOnlyFirst && day_start == last_signal_day) continue;
 
-      double price = close[i], prev = close[i-1], a = atr[i];
+      double price = close[ci], prev = close[ci-1], a = atr[ii];
 
       if(bullish) {
-         bool pullback = (prev < ema20[i-1]) && (price > ema20[i]);
-         bool rsi_ok   = rsi[i] < RsiOverbought;
+         bool pullback = (prev < ema20[ii-1]) && (price > ema20[ii]);
+         bool rsi_ok   = rsi[ii] < RsiOverbought;
          if(pullback && rsi_ok) {
-            LongBuf[i] = low[i];
+            LongBuf[ci] = low[ci];
             last_signal_day = day_start;
-            if(ShowSlTp && i == loop_end - 1) {
+            if(ShowSlTp && ci == rates_total - 1) {
                double sl = price - a * AtrSlMult;
                double tp = price + (price - sl) * RrTarget;
-               DrawSlTp(time[i], sl, tp);
+               DrawSlTp(time[ci], sl, tp);
             }
          }
       }
       else if(bearish && !LongOnly) {
-         bool pullback = (prev > ema20[i-1]) && (price < ema20[i]);
-         bool rsi_ok   = rsi[i] > RsiOversold;
+         bool pullback = (prev > ema20[ii-1]) && (price < ema20[ii]);
+         bool rsi_ok   = rsi[ii] > RsiOversold;
          if(pullback && rsi_ok) {
-            ShortBuf[i] = high[i];
+            ShortBuf[ci] = high[ci];
             last_signal_day = day_start;
-            if(ShowSlTp && i == loop_end - 1) {
+            if(ShowSlTp && ci == rates_total - 1) {
                double sl = price + a * AtrSlMult;
                double tp = price - (sl - price) * RrTarget;
-               DrawSlTp(time[i], sl, tp);
+               DrawSlTp(time[ci], sl, tp);
             }
          }
       }
    }
 
-   // ─── Status panel update (inlined para evitar problemas de paso de array refs) ───
-   int last = loop_end - 1;
-   if(last >= 0) {
-      double cl = close[last];
+   // ─── Status panel update — usar el último bar del chart, mapeado al último indicador ───
+   int chart_last = rates_total - 1;
+   int ind_last   = n_use - 1;
+   if(chart_last >= 0 && ind_last >= 0) {
+      double cl = close[chart_last];
       string bias = "FLAT";
-      if(cl > ema50[last] && ema20[last] > ema50[last])      bias = "BULL";
-      else if(cl < ema50[last] && ema20[last] < ema50[last]) bias = "BEAR";
+      if(cl > ema50[ind_last] && ema20[ind_last] > ema50[ind_last])      bias = "BULL";
+      else if(cl < ema50[ind_last] && ema20[ind_last] < ema50[ind_last]) bias = "BEAR";
 
       string h4txt = "H4: off";
       if(use_h4) {
-         double h4f_v = h4f[last], h4s_v = h4s[last];
+         double h4f_v = h4f[ind_last], h4s_v = h4s[ind_last];
          if(h4f_v > h4s_v)      h4txt = "H4: BULL";
          else if(h4f_v < h4s_v) h4txt = "H4: BEAR";
          else                   h4txt = "H4: flat";
       }
 
       string adxtxt = StringFormat("ADX: %.1f (min %.0f) %s",
-                                   adx[last], AdxMin, (adx[last] >= AdxMin ? "OK" : "X"));
-      string rsitxt = StringFormat("RSI: %.1f", rsi[last]);
-      string pbtxt  = StringFormat("EMA20=%.5f EMA50=%.5f", ema20[last], ema50[last]);
+                                   adx[ind_last], AdxMin, (adx[ind_last] >= AdxMin ? "OK" : "X"));
+      string rsitxt = StringFormat("RSI: %.1f", rsi[ind_last]);
+      string pbtxt  = StringFormat("EMA20=%.5f EMA50=%.5f", ema20[ind_last], ema50[ind_last]);
 
       ObjectSetString(0, g_status_objs[1], OBJPROP_TEXT, "Bias: " + bias);
       ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, h4txt);
@@ -327,7 +338,7 @@ int OnCalculate(const int rates_total,
       ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, rsitxt);
       ObjectSetString(0, g_status_objs[5], OBJPROP_TEXT, pbtxt);
       Comment(StringFormat("FTMO_Pullback: OK | last bar @ %s | close=%.5f",
-                           TimeToString(time[last]), cl));
+                           TimeToString(time[chart_last]), cl));
       ChartRedraw(0);
    }
 

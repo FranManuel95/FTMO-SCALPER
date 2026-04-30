@@ -113,13 +113,15 @@ int OnCalculate(const int rates_total,
 
    for(int i = 0; i < rates_total; i++) TrailBuf[i] = EMPTY_VALUE;
 
+   int bc_atr = BarsCalculated(hAtr);
+   if(bc_atr <= 0) return prev_calculated;
+
+   int n_use = MathMin(MathMin(rates_total, bc_atr), 5000);
+   int chart_start = rates_total - n_use;
+
    double atr[];
    ArraySetAsSeries(atr, false);
-   int got_atr = CopyBuffer(hAtr, 0, 0, rates_total, atr);
-   if(got_atr <= 0) return prev_calculated;
-
-   // Cap iteration to actual available ATR bars (CopyBuffer may return < rates_total)
-   int loop_end = MathMin(rates_total, got_atr);
+   if(CopyBuffer(hAtr, 0, 0, n_use, atr) != n_use) return prev_calculated;
 
    // Buscar posición primera del bot en el símbolo activo
    ulong tk = FindBotTicket();
@@ -136,23 +138,25 @@ int OnCalculate(const int rates_total,
    double highest = 0, lowest = 0;
    bool first = true;
 
-   for(int i = 0; i < loop_end; i++) {
-      if(time[i] < entry_time) continue;
+   for(int ci = chart_start; ci < rates_total; ci++) {
+      int ii = ci - chart_start;
+      if(ii < 0 || ii >= n_use) continue;
+      if(time[ci] < entry_time) continue;
 
       if(first) {
-         highest = high[i];
-         lowest  = low[i];
+         highest = high[ci];
+         lowest  = low[ci];
          first   = false;
       } else {
-         highest = MathMax(highest, high[i]);
-         lowest  = MathMin(lowest,  low[i]);
+         highest = MathMax(highest, high[ci]);
+         lowest  = MathMin(lowest,  low[ci]);
       }
 
       if(ShowTrailLine) {
-         double a = atr[i];
-         if(a <= 0) { TrailBuf[i] = EMPTY_VALUE; continue; }
-         TrailBuf[i] = is_long ? (highest - a * TrailAtrMult)
-                                : (lowest  + a * TrailAtrMult);
+         double a = atr[ii];
+         if(a <= 0) { TrailBuf[ci] = EMPTY_VALUE; continue; }
+         TrailBuf[ci] = is_long ? (highest - a * TrailAtrMult)
+                                 : (lowest  + a * TrailAtrMult);
       }
    }
 

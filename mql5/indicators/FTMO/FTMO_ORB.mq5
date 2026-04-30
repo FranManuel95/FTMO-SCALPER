@@ -174,36 +174,46 @@ int OnCalculate(const int rates_total,
       return 0;
    }
 
+   // Solo procesamos los últimos N bars donde TODOS los indicadores están calculados.
+   int bc_atr = BarsCalculated(hAtr);
+   int bc_adx = BarsCalculated(hAdx);
+   int bc_min = MathMin(bc_atr, bc_adx);
+
+   bool use_h4 = UseH4Filter;
+   if(use_h4) {
+      int bc_h4f = BarsCalculated(hEma50_H4);
+      int bc_h4s = BarsCalculated(hEma200_H4);
+      if(bc_h4f <= 0 || bc_h4s <= 0) use_h4 = false;
+      else bc_min = MathMin(bc_min, MathMin(bc_h4f, bc_h4s));
+   }
+
+   if(bc_min <= needed) {
+      Comment(StringFormat("FTMO_ORB: data not ready (bars_calculated=%d, needed=%d)",
+                           bc_min, needed));
+      return prev_calculated;
+   }
+
+   // Limitar a los últimos N bars (cap de 5000 para no procesar décadas).
+   int n_use = MathMin(MathMin(rates_total, bc_min), 5000);
+   int chart_start = rates_total - n_use;
+
    double atr[], adx[], h4f[], h4s[];
    ArraySetAsSeries(atr, false);
    ArraySetAsSeries(adx, false);
    ArraySetAsSeries(h4f, false);
    ArraySetAsSeries(h4s, false);
 
-   int got_atr = CopyBuffer(hAtr,0,0,rates_total,atr);
-   int got_adx = CopyBuffer(hAdx,0,0,rates_total,adx);
-   if(got_atr <= 0 || got_adx <= 0) {
-      Comment(StringFormat("FTMO_ORB: data not ready atr=%d adx=%d", got_atr, got_adx));
+   if(CopyBuffer(hAtr,0,0,n_use,atr) != n_use ||
+      CopyBuffer(hAdx,0,0,n_use,adx) != n_use) {
+      Comment("FTMO_ORB: CopyBuffer mismatch on ATR/ADX");
       return prev_calculated;
    }
 
-   bool use_h4 = UseH4Filter;
-   int got_h4f = 0, got_h4s = 0;
    if(use_h4) {
-      got_h4f = CopyBuffer(hEma50_H4, 0,0,rates_total,h4f);
-      got_h4s = CopyBuffer(hEma200_H4,0,0,rates_total,h4s);
-      if(got_h4f <= 0 || got_h4s <= 0) use_h4 = false;
-   }
-
-   // Cap the iteration to the smallest available indicator buffer (CopyBuffer may
-   // return fewer elements than rates_total when BarsCalculated() < rates_total).
-   int min_size = MathMin(got_atr, got_adx);
-   if(use_h4) min_size = MathMin(min_size, MathMin(got_h4f, got_h4s));
-   int loop_end = MathMin(rates_total, min_size);
-   if(loop_end <= needed) {
-      Comment(StringFormat("FTMO_ORB: insufficient calculated bars (have %d, need %d)",
-                           min_size, needed));
-      return prev_calculated;
+      if(CopyBuffer(hEma50_H4, 0,0,n_use,h4f) != n_use ||
+         CopyBuffer(hEma200_H4,0,0,n_use,h4s) != n_use) {
+         use_h4 = false;
+      }
    }
 
    int rs = (RangeStartUTC + BrokerOffsetH) % 24;
@@ -211,16 +221,16 @@ int OnCalculate(const int rates_total,
    int es = (EntryStartUTC + BrokerOffsetH) % 24;
    int ee = (EntryEndUTC   + BrokerOffsetH) % 24;
 
-   // Limpiar buffers
-   for(int i = needed; i < loop_end; i++) {
-      LongBuf[i]  = EMPTY_VALUE;
-      ShortBuf[i] = EMPTY_VALUE;
+   // Limpiar TODOS los buffers en el rango del chart
+   for(int j = 0; j < rates_total; j++) {
+      LongBuf[j]  = EMPTY_VALUE;
+      ShortBuf[j] = EMPTY_VALUE;
    }
 
-   // Determinar bar inicial — solo procesamos los últimos MaxDaysBack días
+   // Solo procesamos los últimos MaxDaysBack días dentro de la ventana válida
    datetime cutoff = TimeCurrent() - (datetime)(MaxDaysBack * 86400);
-   int start_idx = needed;
-   for(int k = needed; k < loop_end; k++) {
+   int start_idx = MathMax(chart_start, needed);
+   for(int k = start_idx; k < rates_total; k++) {
       if(time[k] >= cutoff) { start_idx = k; break; }
    }
 
@@ -228,19 +238,22 @@ int OnCalculate(const int rates_total,
    ObjectsDeleteAll(0, g_objPrefix + "Box_");
    ObjectsDeleteAll(0, g_objPrefix + "EBox_");
 
-   // Estado por día (acumulación incremental)
+   // Estado por día
    DayRange cur;
    cur.day = 0;
    cur.high = 0; cur.low = 0;
    cur.built = false; cur.signalled = false;
    cur.range_start_t = 0; cur.range_end_t = 0;
 
-   for(int i = start_idx; i < loop_end; i++) {
-      MqlDateTime dt;
-      TimeToStruct(time[i], dt);
-      datetime day_start = (datetime)((long)time[i] / 86400 * 86400);
+   // Mapping: chart_idx ci → indicator_idx ii = ci - chart_start
+   for(int ci = start_idx; ci < rates_total; ci++) {
+      int ii = ci - chart_start;
+      if(ii < 0 || ii >= n_use) continue;
 
-      // Reset si cambia de día
+      MqlDateTime dt;
+      TimeToStruct(time[ci], dt);
+      datetime day_start = (datetime)((long)time[ci] / 86400 * 86400);
+
       if(day_start != cur.day) {
          cur.day = day_start;
          cur.high = 0; cur.low = 0;
@@ -251,17 +264,16 @@ int OnCalculate(const int rates_total,
       bool in_range = InWindow(dt.hour, rs, re);
       if(in_range) {
          if(cur.range_start_t == 0) {
-            cur.range_start_t = time[i];
-            cur.high = high[i];
-            cur.low  = low[i];
+            cur.range_start_t = time[ci];
+            cur.high = high[ci];
+            cur.low  = low[ci];
          } else {
-            cur.high = MathMax(cur.high, high[i]);
-            cur.low  = MathMin(cur.low,  low[i]);
+            cur.high = MathMax(cur.high, high[ci]);
+            cur.low  = MathMin(cur.low,  low[ci]);
          }
-         cur.range_end_t = time[i] + (datetime)PeriodSeconds(_Period);
+         cur.range_end_t = time[ci] + (datetime)PeriodSeconds(_Period);
       }
 
-      // Marcar built al pasar el final del rango
       if(!in_range && cur.range_start_t > 0 && !cur.built && dt.hour >= re) {
          cur.built = true;
          if(ShowRangeBox) DrawRangeBox(cur);
@@ -272,7 +284,7 @@ int OnCalculate(const int rates_total,
       bool in_entry = InWindow(dt.hour, es, ee);
       if(!in_entry) continue;
 
-      double a = atr[i], dx = adx[i], cl = close[i];
+      double a = atr[ii], dx = adx[ii], cl = close[ci];
       if(a <= 0) continue;
 
       double range_size = cur.high - cur.low;
@@ -285,8 +297,8 @@ int OnCalculate(const int rates_total,
       if(!size_ok || !adx_ok) continue;
 
       if(use_h4) {
-         if(is_long  && h4f[i] < h4s[i]) continue;
-         if(is_short && h4f[i] > h4s[i]) continue;
+         if(is_long  && h4f[ii] < h4s[ii]) continue;
+         if(is_short && h4f[ii] > h4s[ii]) continue;
       }
 
       double buffer = a * AtrSlMult;
@@ -296,25 +308,26 @@ int OnCalculate(const int rates_total,
          double risk = cl - sl;
          if(risk <= 0) continue;
          tp = cl + risk * RrTarget;
-         LongBuf[i] = low[i];
+         LongBuf[ci] = low[ci];
       } else {
          sl = cur.high + buffer;
          double risk = sl - cl;
          if(risk <= 0) continue;
          tp = cl - risk * RrTarget;
-         ShortBuf[i] = high[i];
+         ShortBuf[ci] = high[ci];
       }
       cur.signalled = true;
 
-      if(ShowSlTp && i == loop_end - 1) DrawSlTp(time[i], sl, tp);
+      if(ShowSlTp && ci == rates_total - 1) DrawSlTp(time[ci], sl, tp);
 
-      if(ShowEntryBox) DrawEntryBox(cur, time[i], es, ee);
+      if(ShowEntryBox) DrawEntryBox(cur, time[ci], es, ee);
    }
 
    // ─── Status panel (inlined) ───
-   int last = loop_end - 1;
-   if(last >= 0) {
-      double a = atr[last], dx = adx[last];
+   int chart_last = rates_total - 1;
+   int ind_last   = n_use - 1;
+   if(chart_last >= 0 && ind_last >= 0) {
+      double a = atr[ind_last], dx = adx[ind_last];
 
       string rg;
       if(cur.high > 0 && cur.low > 0 && cur.built) {
@@ -334,7 +347,7 @@ int OnCalculate(const int rates_total,
 
       string h4txt = "H4: off";
       if(use_h4) {
-         double h4f_v = h4f[last], h4s_v = h4s[last];
+         double h4f_v = h4f[ind_last], h4s_v = h4s[ind_last];
          if(h4f_v > h4s_v)      h4txt = "H4: BULL";
          else if(h4f_v < h4s_v) h4txt = "H4: BEAR";
       }
@@ -343,7 +356,7 @@ int OnCalculate(const int rates_total,
       ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, atrtxt);
       ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, adxtxt);
       ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, h4txt);
-      Comment(StringFormat("FTMO_ORB: OK | last bar @ %s", TimeToString(time[last])));
+      Comment(StringFormat("FTMO_ORB: OK | last bar @ %s", TimeToString(time[chart_last])));
       ChartRedraw(0);
    }
 
