@@ -15,60 +15,65 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from src.live.mt5_client import MT5Client
+import MetaTrader5 as mt5
 
 
 SYMBOLS = [
-    ("XAUUSD",  35.0,  "$/lot round-trip"),
-    ("EURUSD",   7.0,  "$/lot round-trip"),
-    ("GBPUSD",   7.0,  "$/lot round-trip"),
-    ("USDJPY",   7.0,  "$/lot round-trip"),
-    ("EURJPY",   7.0,  "$/lot round-trip"),
-    ("GBPJPY",   7.0,  "$/lot round-trip"),
-    ("AUDUSD",   7.0,  "$/lot round-trip"),
-    ("NZDUSD",   7.0,  "$/lot round-trip"),
-    ("USDCAD",   7.0,  "$/lot round-trip"),
-    ("USDCHF",   7.0,  "$/lot round-trip"),
-    ("EURGBP",   7.0,  "$/lot round-trip"),
+    ("XAUUSD",  35.0),
+    ("EURUSD",   7.0),
+    ("GBPUSD",   7.0),
+    ("USDJPY",   7.0),
+    ("EURJPY",   7.0),
+    ("GBPJPY",   7.0),
+    ("AUDUSD",   7.0),
+    ("NZDUSD",   7.0),
+    ("USDCAD",   7.0),
+    ("USDCHF",   7.0),
+    ("EURGBP",   7.0),
 ]
 
 
+def pip_size(symbol: str) -> float:
+    if symbol == "XAUUSD":
+        return 0.10  # XAUUSD: 1 pip = $0.10
+    if "JPY" in symbol:
+        return 0.01
+    return 0.0001
+
+
 def main() -> None:
-    client = MT5Client()
-    client.connect()
+    if not mt5.initialize():
+        print(f"mt5.initialize() falló: {mt5.last_error()}")
+        return
 
-    print(f"{'Symbol':10s} {'Bid':>12s} {'Ask':>12s} {'Spread (pts)':>14s} {'Spread (pips)':>14s} {'Backtest cost':>14s}")
-    print("-" * 80)
+    info = mt5.account_info()
+    print(f"Account: {info.login} | Balance: {info.balance} {info.currency} | Server: {info.server}")
+    print()
 
-    for symbol, modeled_cost, _unit in SYMBOLS:
-        info = client.raw.symbol_info(symbol)
-        if info is None:
-            print(f"{symbol:10s} (no info)")
+    print(f"{'Symbol':10s} {'Bid':>12s} {'Ask':>12s} {'Spread (pts)':>14s} {'Spread (pips)':>14s} {'Backtest cost ($/lot)':>22s}")
+    print("-" * 88)
+
+    for symbol, modeled_cost in SYMBOLS:
+        sym_info = mt5.symbol_info(symbol)
+        if sym_info is None:
+            print(f"{symbol:10s} (no info — símbolo no disponible en este broker)")
             continue
 
-        # Asegura que el símbolo está en Market Watch
-        if not info.visible:
-            client.raw.symbol_select(symbol, True)
+        if not sym_info.visible:
+            mt5.symbol_select(symbol, True)
             time.sleep(0.2)
 
-        tick = client.raw.symbol_info_tick(symbol)
-        if tick is None:
-            print(f"{symbol:10s} (sin tick)")
+        tick = mt5.symbol_info_tick(symbol)
+        if tick is None or tick.bid == 0:
+            print(f"{symbol:10s} (sin tick — mercado cerrado?)")
             continue
 
-        spread_points = tick.ask - tick.bid
-        # pip size: para JPY 0.01, demás 0.0001, XAU 0.01
-        if symbol == "XAUUSD":
-            pip = 0.01
-        elif "JPY" in symbol:
-            pip = 0.01
-        else:
-            pip = 0.0001
-        spread_pips = spread_points / pip
+        spread_pts = tick.ask - tick.bid
+        spread_pips = spread_pts / pip_size(symbol)
 
-        print(f"{symbol:10s} {tick.bid:12.5f} {tick.ask:12.5f} {spread_points:14.5f} {spread_pips:14.2f} {modeled_cost:14.2f}")
+        print(f"{symbol:10s} {tick.bid:12.5f} {tick.ask:12.5f} {spread_pts:14.5f} {spread_pips:14.2f} {modeled_cost:22.2f}")
 
-    client.shutdown()
+    mt5.shutdown()
 
 
 if __name__ == "__main__":
