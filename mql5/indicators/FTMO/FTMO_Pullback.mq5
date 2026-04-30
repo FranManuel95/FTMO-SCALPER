@@ -212,6 +212,19 @@ int OnCalculate(const int rates_total,
       if(got_h4f <= 0 || got_h4s <= 0) use_h4 = false;
    }
 
+   // ── Cap the iteration to the smallest available indicator buffer ──
+   // CopyBuffer may return fewer elements than rates_total if BarsCalculated() < rates_total
+   // (typical on a low timeframe chart that asks for a higher-TF indicator like EMA200 H4).
+   // Without this cap, accessing ema20[rates_total-1] on a partial buffer is out-of-range.
+   int min_size = MathMin(MathMin(MathMin(got_e20, got_e50), MathMin(got_adx, got_atr)), got_rsi);
+   if(use_h4) min_size = MathMin(min_size, MathMin(got_h4f, got_h4s));
+   int loop_end = MathMin(rates_total, min_size);
+   if(loop_end <= needed) {
+      Comment(StringFormat("FTMO_Pullback: insufficient calculated bars (have %d, need %d)",
+                           min_size, needed));
+      return prev_calculated;
+   }
+
    int s_start = (SessionStartUTC + BrokerOffsetH) % 24;
    int s_end   = (SessionEndUTC + BrokerOffsetH) % 24;
 
@@ -227,7 +240,7 @@ int OnCalculate(const int rates_total,
       ShortBuf[j] = EMPTY_VALUE;
    }
 
-   for(int i = needed; i < rates_total; i++) {
+   for(int i = needed; i < loop_end; i++) {
       Ema20Buf[i] = ema20[i];
       Ema50Buf[i] = ema50[i];
 
@@ -265,7 +278,7 @@ int OnCalculate(const int rates_total,
          if(pullback && rsi_ok) {
             LongBuf[i] = low[i];
             last_signal_day = day_start;
-            if(ShowSlTp && i == rates_total - 1) {
+            if(ShowSlTp && i == loop_end - 1) {
                double sl = price - a * AtrSlMult;
                double tp = price + (price - sl) * RrTarget;
                DrawSlTp(time[i], sl, tp);
@@ -278,7 +291,7 @@ int OnCalculate(const int rates_total,
          if(pullback && rsi_ok) {
             ShortBuf[i] = high[i];
             last_signal_day = day_start;
-            if(ShowSlTp && i == rates_total - 1) {
+            if(ShowSlTp && i == loop_end - 1) {
                double sl = price + a * AtrSlMult;
                double tp = price - (sl - price) * RrTarget;
                DrawSlTp(time[i], sl, tp);
@@ -288,7 +301,7 @@ int OnCalculate(const int rates_total,
    }
 
    // ─── Status panel update (inlined para evitar problemas de paso de array refs) ───
-   int last = rates_total - 1;
+   int last = loop_end - 1;
    if(last >= 0) {
       double cl = close[last];
       string bias = "FLAT";
