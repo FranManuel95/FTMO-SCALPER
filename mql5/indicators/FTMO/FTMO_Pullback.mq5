@@ -156,6 +156,12 @@ void CreateStatusPanel() {
    }
    ObjectSetString(0, g_status_objs[0], OBJPROP_TEXT, "FTMO Pullback");
    ObjectSetInteger(0, g_status_objs[0], OBJPROP_FONTSIZE, 10);
+   // Inicializar el resto con placeholders para detectar si la actualización falla
+   ObjectSetString(0, g_status_objs[1], OBJPROP_TEXT, "Bias: …");
+   ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, "H4: …");
+   ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, "ADX: …");
+   ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, "RSI: …");
+   ObjectSetString(0, g_status_objs[5], OBJPROP_TEXT, "EMAs: …");
 }
 
 //+------------------------------------------------------------------+
@@ -191,11 +197,19 @@ int OnCalculate(const int rates_total,
 
    datetime last_signal_day = 0;
 
+   // Inicializar buffers de EMA con EMPTY_VALUE para que MT5 no los pinte en y=0
+   for(int j = 0; j < rates_total; j++) {
+      if(j < needed) {
+         Ema20Buf[j] = EMPTY_VALUE;
+         Ema50Buf[j] = EMPTY_VALUE;
+      }
+      LongBuf[j]  = EMPTY_VALUE;
+      ShortBuf[j] = EMPTY_VALUE;
+   }
+
    for(int i = needed; i < rates_total; i++) {
       Ema20Buf[i] = ema20[i];
       Ema50Buf[i] = ema50[i];
-      LongBuf[i]  = EMPTY_VALUE;
-      ShortBuf[i] = EMPTY_VALUE;
 
       if(i < 2) continue;
 
@@ -253,7 +267,35 @@ int OnCalculate(const int rates_total,
       }
    }
 
-   UpdateStatusPanel(rates_total - 1, ema20, ema50, adx, rsi, h4f, h4s, use_h4, close);
+   // ─── Status panel update (inlined para evitar problemas de paso de array refs) ───
+   int last = rates_total - 1;
+   if(last >= 0) {
+      double cl = close[last];
+      string bias = "FLAT";
+      if(cl > ema50[last] && ema20[last] > ema50[last])      bias = "BULL";
+      else if(cl < ema50[last] && ema20[last] < ema50[last]) bias = "BEAR";
+
+      string h4txt = "H4: off";
+      if(use_h4) {
+         double h4f_v = h4f[last], h4s_v = h4s[last];
+         if(h4f_v > h4s_v)      h4txt = "H4: BULL";
+         else if(h4f_v < h4s_v) h4txt = "H4: BEAR";
+         else                   h4txt = "H4: flat";
+      }
+
+      string adxtxt = StringFormat("ADX: %.1f (min %.0f) %s",
+                                   adx[last], AdxMin, (adx[last] >= AdxMin ? "OK" : "X"));
+      string rsitxt = StringFormat("RSI: %.1f", rsi[last]);
+      string pbtxt  = StringFormat("EMA20=%.5f EMA50=%.5f", ema20[last], ema50[last]);
+
+      ObjectSetString(0, g_status_objs[1], OBJPROP_TEXT, "Bias: " + bias);
+      ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, h4txt);
+      ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, adxtxt);
+      ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, rsitxt);
+      ObjectSetString(0, g_status_objs[5], OBJPROP_TEXT, pbtxt);
+      ChartRedraw(0);
+   }
+
    return rates_total;
 }
 
@@ -272,33 +314,4 @@ void DrawSlTp(datetime t, double sl, double tp) {
    ObjectSetInteger(0,g_lastTP,OBJPROP_WIDTH,1);
 }
 
-//+------------------------------------------------------------------+
-void UpdateStatusPanel(int i, const double &ema20[], const double &ema50[],
-                       const double &adx[], const double &rsi[],
-                       const double &h4f[], const double &h4s[],
-                       bool use_h4, const double &close[]) {
-   if(i < 0) return;
-
-   string bias = "FLAT";
-   if(close[i] > ema50[i] && ema20[i] > ema50[i])      bias = "BULL";
-   else if(close[i] < ema50[i] && ema20[i] < ema50[i]) bias = "BEAR";
-
-   string h4txt = "H4: off";
-   if(use_h4) {
-      if(h4f[i] > h4s[i])      h4txt = "H4: BULL";
-      else if(h4f[i] < h4s[i]) h4txt = "H4: BEAR";
-      else                     h4txt = "H4: flat";
-   }
-
-   string adxtxt = StringFormat("ADX: %.1f (min %.0f) %s",
-                                adx[i], AdxMin, (adx[i] >= AdxMin ? "OK" : "X"));
-   string rsitxt = StringFormat("RSI: %.1f (%.0f-%.0f)", rsi[i], RsiOversold, RsiOverbought);
-   string pbtxt  = "Pullback: -";
-
-   ObjectSetString(0, g_status_objs[1], OBJPROP_TEXT, "Bias: " + bias);
-   ObjectSetString(0, g_status_objs[2], OBJPROP_TEXT, h4txt);
-   ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, adxtxt);
-   ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, rsitxt);
-   ObjectSetString(0, g_status_objs[5], OBJPROP_TEXT, pbtxt);
-}
 //+------------------------------------------------------------------+
