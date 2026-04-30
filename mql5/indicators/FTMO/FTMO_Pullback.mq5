@@ -135,6 +135,7 @@ int OnInit() {
 
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
+   Comment("");
    for(int i=0; i<ArraySize(g_status_objs); i++)
       ObjectDelete(0, g_status_objs[i]);
    ObjectDelete(0, g_lastSL);
@@ -177,19 +178,38 @@ int OnCalculate(const int rates_total,
                 const int &spread[]) {
 
    int needed = MathMax(EmaSlow, AdxPeriod*3) + 5;
-   if(rates_total < needed) return 0;
+   if(rates_total < needed) {
+      Comment(StringFormat("FTMO_Pullback: warmup (rates=%d, needed=%d)", rates_total, needed));
+      return 0;
+   }
 
    double ema20[], ema50[], adx[], atr[], rsi[], h4f[], h4s[];
-   if(CopyBuffer(hEma20,0,0,rates_total,ema20) <= 0) return prev_calculated;
-   if(CopyBuffer(hEma50,0,0,rates_total,ema50) <= 0) return prev_calculated;
-   if(CopyBuffer(hAdx,  0,0,rates_total,adx)   <= 0) return prev_calculated;
-   if(CopyBuffer(hAtr,  0,0,rates_total,atr)   <= 0) return prev_calculated;
-   if(CopyBuffer(hRsi,  0,0,rates_total,rsi)   <= 0) return prev_calculated;
+   ArraySetAsSeries(ema20, false);
+   ArraySetAsSeries(ema50, false);
+   ArraySetAsSeries(adx,   false);
+   ArraySetAsSeries(atr,   false);
+   ArraySetAsSeries(rsi,   false);
+   ArraySetAsSeries(h4f,   false);
+   ArraySetAsSeries(h4s,   false);
+
+   int got_e20 = CopyBuffer(hEma20,0,0,rates_total,ema20);
+   int got_e50 = CopyBuffer(hEma50,0,0,rates_total,ema50);
+   int got_adx = CopyBuffer(hAdx,  0,0,rates_total,adx);
+   int got_atr = CopyBuffer(hAtr,  0,0,rates_total,atr);
+   int got_rsi = CopyBuffer(hRsi,  0,0,rates_total,rsi);
+
+   if(got_e20 <= 0 || got_e50 <= 0 || got_adx <= 0 || got_atr <= 0 || got_rsi <= 0) {
+      Comment(StringFormat("FTMO_Pullback: data not ready ema20=%d ema50=%d adx=%d atr=%d rsi=%d",
+                           got_e20, got_e50, got_adx, got_atr, got_rsi));
+      return prev_calculated;
+   }
 
    bool use_h4 = UseH4Filter;
+   int got_h4f = 0, got_h4s = 0;
    if(use_h4) {
-      if(CopyBuffer(hEma50_H4, 0,0,rates_total,h4f) <= 0) use_h4 = false;
-      if(CopyBuffer(hEma200_H4,0,0,rates_total,h4s) <= 0) use_h4 = false;
+      got_h4f = CopyBuffer(hEma50_H4, 0,0,rates_total,h4f);
+      got_h4s = CopyBuffer(hEma200_H4,0,0,rates_total,h4s);
+      if(got_h4f <= 0 || got_h4s <= 0) use_h4 = false;
    }
 
    int s_start = (SessionStartUTC + BrokerOffsetH) % 24;
@@ -293,6 +313,8 @@ int OnCalculate(const int rates_total,
       ObjectSetString(0, g_status_objs[3], OBJPROP_TEXT, adxtxt);
       ObjectSetString(0, g_status_objs[4], OBJPROP_TEXT, rsitxt);
       ObjectSetString(0, g_status_objs[5], OBJPROP_TEXT, pbtxt);
+      Comment(StringFormat("FTMO_Pullback: OK | last bar @ %s | close=%.5f",
+                           TimeToString(time[last]), cl));
       ChartRedraw(0);
    }
 
